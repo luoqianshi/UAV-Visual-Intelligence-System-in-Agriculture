@@ -22,6 +22,16 @@ def create_app() -> Flask:
     """创建并配置 Flask 应用。"""
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
 
+    # 引擎初始化（Task 9）：失败时降级运行，仅记录警告
+    try:
+        from core.engine import init_engines
+        init_engines()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"引擎初始化失败（API 将以降级模式运行）：{exc}"
+        )
+
     # 注册 Blueprint（Task 9 起逐步增加）
     app.register_blueprint(health_bp)
 
@@ -58,5 +68,5 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    _init_engines()
+    # create_app() 已完成引擎初始化，此处直接启动
     app.run(host=HOST, port=PORT, debug=DEBUG)
