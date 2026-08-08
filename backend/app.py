@@ -15,6 +15,12 @@ if str(BACKEND_DIR) not in sys.path:
 from flask import Flask, send_from_directory  # noqa: E402
 
 from api.health_api import health_bp  # noqa: E402
+from api.models_api import models_bp  # noqa: E402
+from api.detect_api import detect_bp  # noqa: E402
+from api.counting_api import counting_bp  # noqa: E402
+from api.batches_api import batches_bp  # noqa: E402
+from api.processing_api import processing_bp  # noqa: E402
+from api.datasets_api import datasets_bp  # noqa: E402
 from config import STATIC_DIR, HOST, PORT, DEBUG  # noqa: E402
 
 
@@ -32,8 +38,14 @@ def create_app() -> Flask:
             f"引擎初始化失败（API 将以降级模式运行）：{exc}"
         )
 
-    # 注册 Blueprint（Task 9 起逐步增加）
+    # 注册 Blueprint
     app.register_blueprint(health_bp)
+    app.register_blueprint(models_bp)
+    app.register_blueprint(detect_bp)
+    app.register_blueprint(counting_bp)
+    app.register_blueprint(batches_bp)
+    app.register_blueprint(processing_bp)
+    app.register_blueprint(datasets_bp)
 
     # SPA 静态资源兜底：非 /api 路由回退到 index.html
     @app.route("/", defaults={"path": ""})
