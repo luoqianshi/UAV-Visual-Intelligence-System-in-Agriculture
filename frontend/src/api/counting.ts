@@ -1,0 +1,45 @@
+import client from './client'
+
+export interface CountingParams {
+  tile_size?: number
+  overlap_ratio?: number
+  nms_iou?: number
+  ground_resolution?: number
+  grid_n?: number
+  conf?: number
+  iou?: number
+  max_det?: number
+  imgsz?: number
+}
+
+export interface CountingReport {
+  count: number
+  density_per_m2: number
+  area_m2: number
+  heatmap: number[][]
+  confidence_dist: { high: number; mid: number; low: number }
+  detection_data: any[]
+  annotated_image: string
+  model_info: { name: string; display_name: string; imgsz: number }
+  params_snapshot: CountingParams
+  image_size: [number, number]
+  tile_count: number
+  result_id?: string
+  created_at?: string
+}
+
+export interface CountingTaskStatus {
+  task_id: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  progress: number
+  result: any
+  error: string | null
+}
+
+export const countingApi = {
+  submit: (payload: { image_path?: string; image_dir?: string; model_name?: string } & CountingParams) =>
+    client.post<unknown, { data: { task_id: string } }>('/counting', payload),
+  getTask: (task_id: string) => client.get<unknown, { data: CountingTaskStatus }>(`/counting/tasks/${task_id}`),
+  getResult: (task_id: string) => client.get<unknown, { data: CountingReport }>(`/counting/tasks/${task_id}/result`),
+  history: () => client.get<unknown, { data: any[] }>('/counting/history'),
+}
