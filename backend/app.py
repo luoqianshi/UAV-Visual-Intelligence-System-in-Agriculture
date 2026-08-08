@@ -25,8 +25,14 @@ from config import STATIC_DIR, HOST, PORT, DEBUG  # noqa: E402
 
 
 def create_app() -> Flask:
-    """创建并配置 Flask 应用。"""
-    app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
+    """创建并配置 Flask 应用。
+
+    不启用 Flask 内置 static 端点（static_folder/static_url_path）：
+    内置端点会注册 /<path:filename> 路由并优先于自定义 serve_spa，
+    导致 /algo/models 等 SPA 客户端路由（非真实文件）被 static 端点拦截返回 404，
+    而非回退到 index.html。改由下方 serve_spa 统一处理静态资源与 SPA 回退。
+    """
+    app = Flask(__name__)
 
     # 引擎初始化（Task 9）：失败时降级运行，仅记录警告
     try:

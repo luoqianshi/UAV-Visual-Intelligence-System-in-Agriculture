@@ -115,3 +115,31 @@ def test_counting_history(client):
     body = resp.get_json()
     assert body["success"] is True
     assert isinstance(body["data"], list)
+
+
+# ---------------------------------------------------------------------------
+# 7. SPA 客户端路由回退：非 /api、非真实文件路径应返回 index.html（200）
+#    回归测试：曾因 Flask 内置 static 端点优先于 serve_spa 导致 /algo/models 等
+#    客户端路由返回 404，刷新页面白屏。
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("spa_route", [
+    "/algo/models",
+    "/algo/counting",
+    "/data/batches",
+    "/process/tasks",
+    "/dataset/datasets",
+])
+def test_spa_route_fallback(client, spa_route):
+    resp = client.get(spa_route)
+    assert resp.status_code == 200
+    assert b"<div id=\"app\">" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# 8. 未匹配的 /api 路由应返回 404 JSON（而非 SPA index.html）
+# ---------------------------------------------------------------------------
+def test_unknown_api_route_returns_404_json(client):
+    resp = client.get("/api/nonexistent-endpoint")
+    assert resp.status_code == 404
+    body = resp.get_json()
+    assert body["success"] is False
