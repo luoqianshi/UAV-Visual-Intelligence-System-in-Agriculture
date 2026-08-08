@@ -1,0 +1,50 @@
+default_model: yolov8s-sugarcane
+models:
+  - name: yolov5su-sugarcane
+    engine: ultralytics
+    weight: models/yolov5su_sugarcane_best.pt
+    display_name: "YOLOv5su 甘蔗幼苗"
+    category: sugarcane_seedling
+    imgsz: 640
+    conf: 0.4
+    iou: 0.3
+    device: auto
+    classes: ["Sugarcane Seedling"]
+    max_det: 300
+    half: false
+  - name: yolov8s-sugarcane
+    engine: ultralytics
+    weight: models/yolov8s_sugarcane_best.pt
+    display_name: "YOLOv8s 甘蔗幼苗"
+    category: sugarcane_seedling
+    imgsz: 640
+    conf: 0.4
+    iou: 0.3
+    device: auto
+    classes: ["Sugarcane Seedling"]
+    max_det: 300
+    half: false
+  - name: yolov11s-sugarcane
+    engine: ultralytics
+    weight: models/yolov11s_sugarcane_best.pt
+    display_name: "YOLOv11s 甘蔗幼苗"
+    category: sugarcane_seedling
+    imgsz: 640
+    conf: 0.4
+    iou: 0.3
+    device: auto
+    classes: ["Sugarcane Seedling"]
+    max_det: 300
+    half: false
+  - name: yolov12s-sugarcane
+    engine: ultralytics
+    weight: models/yolov12s_sugarcane_best.pt
+    display_name: "YOLOv12s 甘蔗幼苗"
+    category: sugarcane_seedling
+    imgsz: 640
+    conf: 0.4
+    iou: 0.3
+    device: auto
+    classes: ["Sugarcane Seedling"]
+    max_det: 300
+    half: false

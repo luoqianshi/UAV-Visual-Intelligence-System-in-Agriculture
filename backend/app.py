@@ -1,0 +1,62 @@
+"""Flask 应用入口：注册 Blueprint，托管前端静态资源。
+
+开发期：Vite :3000 代理 /api → :5000。
+生产部署：npm run build 产物落入 backend/static/，Flask :5000 单端口提供 API 与静态资源。
+"""
+import os
+import sys
+from pathlib import Path
+
+# 确保 backend/ 目录在 sys.path 上，使 bare 导入（from core.x / from config / from api.x）生效
+BACKEND_DIR = Path(__file__).resolve().parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from flask import Flask, send_from_directory  # noqa: E402
+
+from api.health_api import health_bp  # noqa: E402
+from config import STATIC_DIR, HOST, PORT, DEBUG  # noqa: E402
+
+
+def create_app() -> Flask:
+    """创建并配置 Flask 应用。"""
+    app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
+
+    # 注册 Blueprint（Task 9 起逐步增加）
+    app.register_blueprint(health_bp)
+
+    # SPA 静态资源兜底：非 /api 路由回退到 index.html
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def serve_spa(path: str):
+        if path.startswith("api"):
+            # 未匹配的 API 路由返回 404 JSON
+            return {"success": False, "data": None, "message": f"路由不存在: /{path}"}, 404
+        full = STATIC_DIR / path
+        if full.is_file():
+            return send_from_directory(str(STATIC_DIR), path)
+        index = STATIC_DIR / "index.html"
+        if index.is_file():
+            return send_from_directory(str(STATIC_DIR), "index.html")
+        # 静态资源尚未构建
+        return {"success": True, "data": {"service": "低空智瞰 UAV 智能监测系统"},
+                "message": "前端尚未构建，请先 cd frontend && npm install && npm run build"}, 200
+
+    return app
+
+
+# 引擎初始化（Task 9 起启用）
+def _init_engines():
+    try:
+        from core.engine import init_engines
+        init_engines()
+    except Exception as exc:  # pragma: no cover - 启动期容错
+        print(f"[警告] 引擎初始化失败：{exc}")
+
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    _init_engines()
+    app.run(host=HOST, port=PORT, debug=DEBUG)

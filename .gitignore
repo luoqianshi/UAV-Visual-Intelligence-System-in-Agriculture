@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+
+# Node
+node_modules/
+dist/
+
+# 模型权重（大文件，不纳入版本控制）
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# 运行产物
+results/
+backend/static/
+output/
+datasets/
+metadata/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 系统
+.DS_Store
+Thumbs.db
