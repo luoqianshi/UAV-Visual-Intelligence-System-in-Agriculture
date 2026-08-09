@@ -100,6 +100,7 @@ python -m backend.app          # Flask :5000
 # 终端 2：前端
 cd frontend
 npm install
+npm run build                  # 建议每次改动完之后都重新build一下~
 npm run dev                    # Vite :3000，/api 代理到 :5000
 ```
 

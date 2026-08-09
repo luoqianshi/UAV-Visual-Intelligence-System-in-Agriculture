@@ -53,6 +53,16 @@ def create_app() -> Flask:
     app.register_blueprint(processing_bp)
     app.register_blueprint(datasets_bp)
 
+    # 全局错误兜底：未捕获异常统一返回 JSON 信封，避免前端收到 HTML 500
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(exc):
+        from werkzeug.exceptions import HTTPException
+        if isinstance(exc, HTTPException):
+            return exc  # 404/405 等保持默认行为（SPA 回退不受影响）
+        app.logger.exception("未捕获异常")
+        return {"success": False, "data": None,
+                "message": f"服务器内部错误: {exc}"}, 500
+
     # SPA 静态资源兜底：非 /api 路由回退到 index.html
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
