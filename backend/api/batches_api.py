@@ -6,8 +6,6 @@
 import io
 import json
 
-import cv2
-import numpy as np
 from flask import Blueprint, Response, jsonify, request, send_from_directory
 from werkzeug.exceptions import NotFound
 
@@ -23,7 +21,12 @@ def _load_batches():
 
 
 def _placeholder_image(label, w=400, h=300):
-    """生成带文字标签的占位 JPEG 图片响应。"""
+    """生成带文字标签的占位 JPEG 图片响应；cv2 缺失时回退极简 JPEG。"""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return Response(b"\xff\xd8\xff\xe0\x00\x10JFIF", mimetype="image/jpeg")
     img = np.full((h, w, 3), 245, dtype=np.uint8)
     cv2.putText(
         img,
