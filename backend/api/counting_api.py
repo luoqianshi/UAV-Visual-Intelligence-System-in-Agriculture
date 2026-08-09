@@ -1,11 +1,12 @@
 """计数 API：POST /api/counting（异步）、GET /api/counting/tasks/<id>(/result)、GET /api/counting/history。
 
-- 单图高分辨率计数：image_path（或 image_dir 取首图）→ 异步任务 → CLAHE/分块/
+- 单图高分辨率计数：multipart 文件上传或 image_path（或 image_dir 取首图）→ 异步任务 → CLAHE/分块/
   检测/NMS/统计 → 落盘到 result_store。
 - on_progress 将 counter 的阶段回调映射到 0-1 进度并写入 task_manager。
 - 引擎调用全部 try/except 兜底，ultralytics/torch 缺失时返回 success:False 而非 500。
 """
 import os
+import tempfile
 import time
 import uuid
 from datetime import datetime
@@ -74,65 +75,102 @@ def counting():
             "success": False, "data": None, "message": "counter 未初始化",
         })
 
-    body = request.get_json(silent=True) or {}
-    image_path = body.get("image_path")
-    image_dir = body.get("image_dir")
-    model_name = body.get("model_name")
-    params = _build_params(body)
+    cleanup_tmp = None
+    # ① 优先处理 multipart 文件上传
+    if "image" in request.files:
+        file = request.files["image"]
+        ext = os.path.splitext(file.filename or "")[1] or ".jpg"
+        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+        try:
+            file.save(tmp.name)
+            tmp.close()
+            image_path = tmp.name
+            cleanup_tmp = tmp.name
+            model_name = request.form.get("model_name")
+            params = _build_params(request.form)
+        except Exception:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+            raise
+    else:
+        # ② JSON 模式：image_path / image_dir
+        body = request.get_json(silent=True) or {}
+        image_path = body.get("image_path")
+        image_dir = body.get("image_dir")
+        model_name = body.get("model_name")
+        params = _build_params(body)
 
-    # image_dir 兜底：取首图作为单图计数输入
-    if not image_path and image_dir:
-        image_path = _pick_first_image(image_dir)
+        # image_dir 兜底：取首图作为单图计数输入
+        if not image_path and image_dir:
+            image_path = _pick_first_image(image_dir)
 
     if not image_path or not os.path.isfile(image_path):
+        if cleanup_tmp:
+            try:
+                os.unlink(cleanup_tmp)
+            except OSError:
+                pass
         return jsonify({
             "success": False, "data": None,
-            "message": "请提供有效的 image_path 或 image_dir",
+            "message": "请提供有效的图片文件或 image_path / image_dir",
         })
 
-    def _run(task_id, image_path, model_name, params):
+    def _run(task_id, image_path, model_name, params, cleanup_tmp=None):
         """计数任务体：执行 counter.count → 落盘 → 返回轻量摘要。"""
+        try:
+            def on_progress(stage, current, total):
+                if stage == "enhancing":
+                    pct = 0.0
+                elif stage == "detecting":
+                    ratio = current / total if total else 1.0
+                    pct = 0.05 + 0.9 * ratio
+                else:
+                    pct = 0.0
+                task_manager.update(task_id, progress=pct, status="processing")
 
-        def on_progress(stage, current, total):
-            if stage == "enhancing":
-                pct = 0.0
-            elif stage == "detecting":
-                ratio = current / total if total else 1.0
-                pct = 0.05 + 0.9 * ratio
-            else:
-                pct = 0.0
-            task_manager.update(task_id, progress=pct, status="processing")
-
-        result = counter.count(
-            image_path, model_name=model_name, params=params,
-            on_progress=on_progress,
-        )
-        result_id = (
-            f"count_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            f"_{uuid.uuid4().hex[:6]}"
-        )
-        result["result_id"] = result_id
-        save_counting_result(result)
-        return {
-            "result_id": result_id,
-            "count": result.get("count"),
-            "density_per_m2": result.get("density_per_m2"),
-            "summary": {
+            result = counter.count(
+                image_path, model_name=model_name, params=params,
+                on_progress=on_progress,
+            )
+            result_id = (
+                f"count_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                f"_{uuid.uuid4().hex[:6]}"
+            )
+            result["result_id"] = result_id
+            save_counting_result(result)
+            return {
+                "result_id": result_id,
                 "count": result.get("count"),
                 "density_per_m2": result.get("density_per_m2"),
-                "area_m2": result.get("area_m2"),
-                "tile_count": result.get("tile_count"),
-                "confidence_dist": result.get("confidence_dist"),
-                "image_size": result.get("image_size"),
-                "model_info": result.get("model_info"),
-            },
-        }
+                "summary": {
+                    "count": result.get("count"),
+                    "density_per_m2": result.get("density_per_m2"),
+                    "area_m2": result.get("area_m2"),
+                    "tile_count": result.get("tile_count"),
+                    "confidence_dist": result.get("confidence_dist"),
+                    "image_size": result.get("image_size"),
+                    "model_info": result.get("model_info"),
+                },
+            }
+        finally:
+            if cleanup_tmp:
+                try:
+                    os.unlink(cleanup_tmp)
+                except OSError:
+                    pass
 
     try:
         task_id = task_manager.submit(
-            "counting", _run, image_path, model_name, params
+            "counting", _run, image_path, model_name, params, cleanup_tmp
         )
     except Exception as exc:
+        if cleanup_tmp:
+            try:
+                os.unlink(cleanup_tmp)
+            except OSError:
+                pass
         return jsonify({
             "success": False, "data": None,
             "message": f"任务提交失败: {exc}",

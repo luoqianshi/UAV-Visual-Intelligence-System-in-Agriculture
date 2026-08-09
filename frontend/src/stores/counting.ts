@@ -12,13 +12,19 @@ export const useCountingStore = defineStore('counting', () => {
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
-  async function submit(payload: { image_path?: string; image_dir?: string; model_name?: string } & CountingParams) {
+  async function submit(payload: { image?: File; image_path?: string; image_dir?: string; model_name?: string } & CountingParams) {
     error.value = ''
     result.value = null
     progress.value = 0
     status.value = 'pending'
     taskId.value = ''
-    const res = await countingApi.submit(payload)
+    let res
+    if (payload.image) {
+      const { image, model_name, ...params } = payload
+      res = await countingApi.submitWithFile(image, model_name, params as CountingParams)
+    } else {
+      res = await countingApi.submit(payload)
+    }
     taskId.value = res.data.task_id
     startPolling()
   }

@@ -103,18 +103,22 @@ class CountingEngine:
         return {"high": hi, "mid": mid, "low": lo}
 
     def _draw(self, image, dets):
-        """在原图上绘制检测框与编号，返回 base64 JPEG 字符串。"""
-        img = image.copy()
+        """在原图上绘制检测框与编号，返回 base64 JPEG 字符串。
+
+        image 为 RGB 顺序（count() 中已 BGR→RGB）；cv2 绘制与 imencode 均以
+        BGR 为准，故先转 BGR，颜色元组按 BGR 顺序书写，否则 R/B 对调致偏蓝。
+        """
+        img = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # RGB → BGR
         for d in dets:
             x1, y1, x2, y2 = [int(v) for v in d["bbox"]]
-            cv2.rectangle(img, (x1, y1), (x2, y2), (229, 57, 53), 2)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (53, 57, 229), 2)  # BGR: 红
             cv2.putText(
                 img,
                 str(d["id"]),
                 (x1, y1 - 5),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
-                (229, 57, 53),
+                (53, 57, 229),  # BGR: 红
                 1,
             )
         _, buf = cv2.imencode(".jpg", img)

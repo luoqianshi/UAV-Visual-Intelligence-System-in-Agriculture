@@ -117,18 +117,27 @@ class DetectionEngine:
         ]
 
     def _draw(self, image, detections):
-        """在图像上绘制检测框与置信度，返回 base64 JPEG 字符串。"""
-        img = cv2.imread(image) if isinstance(image, str) else image.copy()
+        """在图像上绘制检测框与置信度，返回 base64 JPEG 字符串。
+
+        image 可为文件路径（cv2.imread 得 BGR）或 RGB 数组；统一到 BGR 后再
+        绘制与编码，颜色元组按 BGR 顺序书写，避免 R/B 对调致框色偏蓝。
+        """
+        if isinstance(image, str):
+            img = cv2.imread(image)  # BGR
+        elif image.ndim == 3:
+            img = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # RGB → BGR
+        else:
+            img = image.copy()
         for det in detections:
             x1, y1, x2, y2 = [int(v) for v in det["bbox"]]
-            cv2.rectangle(img, (x1, y1), (x2, y2), (229, 57, 53), 2)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (53, 57, 229), 2)  # BGR: 红
             cv2.putText(
                 img,
                 f'{det["confidence"]:.2f}',
                 (x1, y1 - 5),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
-                (229, 57, 53),
+                (53, 57, 229),  # BGR: 红
                 1,
             )
         _, buf = cv2.imencode(".jpg", img)

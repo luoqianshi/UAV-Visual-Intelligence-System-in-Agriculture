@@ -75,4 +75,11 @@ def load_counting_result(result_id: str) -> dict:
     data_file = RESULTS_DIR / result_id / "counting_data.json"
     if not data_file.exists():
         raise FileNotFoundError(f"结果不存在: {result_id}")
-    return json.loads(data_file.read_text(encoding="utf-8"))
+    data = json.loads(data_file.read_text(encoding="utf-8"))
+    # 补全 annotated_image：从 result_image.jpg 重新编码为 base64
+    img_file = RESULTS_DIR / result_id / "result_image.jpg"
+    if img_file.exists():
+        data["annotated_image"] = base64.b64encode(
+            img_file.read_bytes()
+        ).decode("utf-8")
+    return data

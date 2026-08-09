@@ -1,16 +1,81 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import SubTabs from '@/components/layout/SubTabs.vue'
+import DetectionViewer from '@/components/algo/DetectionViewer.vue'
 import { useCountingStore } from '@/stores/counting'
 import { useModelStore } from '@/stores/model'
 import HeatmapChart from '@/components/algo/HeatmapChart.vue'
 import ConfidenceDistChart from '@/components/algo/ConfidenceDistChart.vue'
 
-// 作物计数工作台：1:1 迁移 V0.4 algo/counting.html
-// 静态 HTML → Vue3 + 真实 store + ECharts
+// 作物计数工作台：支持文件上传预览 + 本机路径双模式
 const countingStore = useCountingStore()
 const modelStore = useModelStore()
+
+// ---- 文件上传模式状态 ----
+const selectedFile = ref<File | null>(null)
+const previewUrl = ref<string>('')
+const fileInput = ref<HTMLInputElement | null>(null)
+const imgDimensions = ref<{ w: number; h: number } | null>(null)
+const isDragging = ref(false)
+
+function revokePreview() {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
+  }
+}
+
+function onFileChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  handleFileSelect(file)
+  target.value = ''
+}
+
+function handleFileSelect(file: File) {
+  revokePreview()
+  selectedFile.value = file
+  previewUrl.value = URL.createObjectURL(file)
+  imgDimensions.value = null
+  imagePath.value = '' // 清空路径输入，优先使用文件上传
+  const img = new Image()
+  img.onload = () => {
+    imgDimensions.value = { w: img.naturalWidth, h: img.naturalHeight }
+  }
+  img.src = previewUrl.value
+}
+
+function clearFile() {
+  revokePreview()
+  selectedFile.value = null
+  imgDimensions.value = null
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+// 拖拽事件
+function onDragOver(e: DragEvent) {
+  e.preventDefault()
+  isDragging.value = true
+}
+function onDragLeave(e: DragEvent) {
+  e.preventDefault()
+  isDragging.value = false
+}
+function onDrop(e: DragEvent) {
+  e.preventDefault()
+  isDragging.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (file && file.type.startsWith('image/')) {
+    handleFileSelect(file)
+  }
+}
 
 // ---- 参数表单（默认值对齐原型）----
 const srcMode = ref<'single' | 'dir'>('single')
@@ -28,6 +93,14 @@ const grid_n = ref(8)
 const isRunning = computed(
   () => countingStore.status === 'pending' || countingStore.status === 'processing',
 )
+
+const canSubmit = computed(() => {
+  if (isRunning.value) return false
+  const hasFile = !!selectedFile.value
+  const hasPath = !!(srcMode.value === 'single' ? imagePath.value.trim() : imagePath.value.trim())
+  const hasModel = !!modelName.value
+  return (hasFile || hasPath) && hasModel
+})
 
 const statusText = computed(() => {
   switch (countingStore.status) {
@@ -122,9 +195,7 @@ function historyResultId(h: any): string {
 async function onSubmit() {
   if (isRunning.value) return
   try {
-    await countingStore.submit({
-      image_path: srcMode.value === 'single' ? imagePath.value.trim() || undefined : undefined,
-      image_dir: srcMode.value === 'dir' ? imagePath.value.trim() || undefined : undefined,
+    const payload: any = {
       model_name: modelName.value || undefined,
       tile_size: tile_size.value,
       overlap_ratio: overlap_ratio.value,
@@ -134,7 +205,14 @@ async function onSubmit() {
       conf: conf.value,
       iou: iou.value,
       max_det: max_det.value,
-    })
+    }
+    if (selectedFile.value) {
+      payload.image = selectedFile.value
+    } else {
+      payload.image_path = srcMode.value === 'single' ? imagePath.value.trim() || undefined : undefined
+      payload.image_dir = srcMode.value === 'dir' ? imagePath.value.trim() || undefined : undefined
+    }
+    await countingStore.submit(payload)
   } catch {
     // 错误已由 store 写入 error，UI 内联展示
   }
@@ -204,6 +282,10 @@ onMounted(() => {
   countingStore.fetchHistory().catch(() => [])
 })
 
+onBeforeUnmount(() => {
+  revokePreview()
+})
+
 onUnmounted(() => {
   countingStore.stopPolling()
 })
@@ -265,40 +347,82 @@ onUnmounted(() => {
         <!-- 输入源 -->
         <div class="bg-white border border-surface-border rounded-card p-5">
           <h3 class="text-sm font-semibold text-ink-primary mb-3">输入源</h3>
-          <div class="flex items-center gap-4 border-b border-surface-border mb-4">
-            <div
-              class="px-3 py-1.5 text-xs border-b-2 border-transparent cursor-pointer transition-colors"
-              :class="
-                srcMode === 'single'
-                  ? 'text-brand-700 border-brand-700 font-medium'
-                  : 'text-ink-secondary hover:text-brand-700'
-              "
-              @click="srcMode = 'single'"
-            >
-              单张原图
-            </div>
-            <div
-              class="px-3 py-1.5 text-xs border-b-2 border-transparent cursor-pointer transition-colors"
-              :class="
-                srcMode === 'dir'
-                  ? 'text-brand-700 border-brand-700 font-medium'
-                  : 'text-ink-secondary hover:text-brand-700'
-              "
-              @click="srcMode = 'dir'"
-            >
-              原图目录（批量）
-            </div>
-          </div>
-          <div class="dropzone !p-6">
+          <div
+            class="dropzone !p-6 transition-colors"
+            :class="{ '!border-brand-500 !bg-brand-50': isDragging }"
+            @click="fileInput?.click()"
+            @dragover="onDragOver"
+            @dragleave="onDragLeave"
+            @drop="onDrop"
+          >
             <i class="fa-solid fa-cloud-arrow-up text-3xl text-brand-300 mb-2"></i>
             <div class="text-sm text-ink-primary font-medium">
               拖拽原图到此处，或点击选择
             </div>
             <div class="text-xs text-ink-tertiary mt-1">支持 JPG / PNG / BMP / TIFF · 单张 ≤50MB</div>
+            <input
+              ref="fileInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="onFileChange"
+            />
           </div>
-          <div class="mt-3">
+          <!-- 已选择文件：缩略图 + 文件名 + 大小 -->
+          <div v-if="selectedFile" class="mt-3 flex items-center gap-3">
+            <img
+              v-if="previewUrl"
+              :src="previewUrl"
+              alt="预览"
+              class="w-12 h-12 object-cover rounded-btn border border-surface-border flex-shrink-0"
+            />
+            <div class="text-xs text-ink-tertiary flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <i class="fa-regular fa-circle-check text-brand-700"></i>
+                <span class="text-ink-primary font-medium truncate">{{ selectedFile.name }}</span>
+              </div>
+              <div class="mt-0.5">
+                {{ formatSize(selectedFile.size) }}<span v-if="imgDimensions">
+                  · {{ imgDimensions.w }}×{{ imgDimensions.h }}</span
+                >
+              </div>
+            </div>
+            <button
+              class="text-ink-tertiary hover:text-ink-primary flex-shrink-0"
+              title="移除"
+              @click="clearFile"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <!-- 本机路径输入（可选，用于服务器端路径模式） -->
+          <div class="mt-3 pt-3 border-t border-surface-border" v-if="!selectedFile">
+            <div class="flex items-center gap-4 mb-3">
+              <div
+                class="px-3 py-1 text-xs border-b-2 border-transparent cursor-pointer transition-colors"
+                :class="
+                  srcMode === 'single'
+                    ? 'text-brand-700 border-brand-700 font-medium'
+                    : 'text-ink-secondary hover:text-brand-700'
+                "
+                @click="srcMode = 'single'"
+              >
+                单张路径
+              </div>
+              <div
+                class="px-3 py-1 text-xs border-b-2 border-transparent cursor-pointer transition-colors"
+                :class="
+                  srcMode === 'dir'
+                    ? 'text-brand-700 border-brand-700 font-medium'
+                    : 'text-ink-secondary hover:text-brand-700'
+                "
+                @click="srcMode = 'dir'"
+              >
+                目录路径（批量）
+              </div>
+            </div>
             <label class="block text-xs font-medium text-ink-primary mb-1.5">
-              {{ srcMode === 'single' ? '原图本机路径' : '原图目录路径' }}
+              {{ srcMode === 'single' ? '原图本机路径（可选）' : '原图目录路径（可选）' }}
             </label>
             <input
               v-model="imagePath"
@@ -308,11 +432,11 @@ onUnmounted(() => {
             />
           </div>
           <div
-            v-if="imageBasename"
+            v-if="imageBasename && !selectedFile"
             class="mt-3 text-xs text-ink-tertiary flex items-center gap-1.5"
           >
             <i class="fa-regular fa-circle-check text-brand-700"></i>
-            已选择：<span class="text-ink-primary font-medium font-mono">{{ imageBasename }}</span>
+            已选择路径：<span class="text-ink-primary font-medium font-mono">{{ imageBasename }}</span>
           </div>
         </div>
 
@@ -428,8 +552,8 @@ onUnmounted(() => {
 
           <!-- 执行按钮 -->
           <button
-            :disabled="isRunning"
-            class="w-full mt-4 px-4 py-2.5 bg-brand-700 hover:bg-brand-900 text-white rounded-btn text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="!canSubmit"
+            class="w-full mt-4 px-4 py-2.5 bg-brand-700 hover:bg-brand-900 text-white rounded-btn text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             @click="onSubmit"
           >
             <i class="fa-solid fa-calculator text-xs"></i>
@@ -516,42 +640,27 @@ onUnmounted(() => {
               <span class="text-brand-700 font-medium">计数 {{ countingStore.result.count ?? '—' }} 株</span>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-4">
-            <!-- 原图（API 仅返回标注图，原图为本机路径无法在浏览器预览） -->
+          <!-- 分块未触发提示：tile_count=1 时说明原图未超过 tile_size -->
+          <div
+            v-if="countingStore.result && countingStore.result.tile_count === 1"
+            class="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-btn text-xs text-amber-700 flex items-start gap-2"
+          >
+            <i class="fa-solid fa-circle-info mt-0.5 flex-shrink-0"></i>
             <div>
-              <div class="text-xs text-ink-tertiary mb-2">原图</div>
-              <div
-                class="aspect-[4/3] bg-gradient-to-br from-green-50 to-amber-50 rounded-btn flex flex-col items-center justify-center border border-surface-border text-center px-3"
-              >
-                <i class="fa-solid fa-image text-4xl text-ink-tertiary opacity-30 mb-2"></i>
-                <div class="text-xs text-ink-tertiary">
-                  原图为本机路径，无法在浏览器预览
-                </div>
-                <div v-if="imageBasename" class="text-xs text-ink-secondary font-mono mt-1 truncate max-w-full">
-                  {{ imageBasename }}
-                </div>
-              </div>
-            </div>
-            <!-- 标注图 -->
-            <div>
-              <div class="text-xs text-ink-tertiary mb-2">检测结果（红色框 · 已计数）</div>
-              <div class="aspect-[4/3] rounded-btn flex items-center justify-center border border-surface-border overflow-hidden bg-surface-bg relative">
-                <img
-                  v-if="countingStore.result.annotated_image"
-                  :src="countingStore.result.annotated_image.startsWith('data:') ? countingStore.result.annotated_image : `data:image/jpeg;base64,${countingStore.result.annotated_image}`"
-                  alt="检测结果标注图"
-                  class="w-full h-full object-contain"
-                />
-                <i v-else class="fa-solid fa-image text-4xl text-ink-tertiary opacity-30"></i>
-                <div
-                  v-if="countingStore.result.count"
-                  class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded"
-                >
-                  共标注 {{ countingStore.result.count }} 个目标
-                </div>
-              </div>
+              本次仅生成 1 个分块：原图尺寸（{{ countingStore.result.image_size?.[0] }}×{{ countingStore.result.image_size?.[1] }}）
+              未超过 tile_size（{{ countingStore.result.params_snapshot?.tile_size ?? 640 }}），整图作为单块送检，未触发滑窗分块。
+              如需分块检测，请上传更大尺寸图片或调小 tile_size。
             </div>
           </div>
+          <DetectionViewer
+            :original-image="previewUrl"
+            :result-image="countingStore.result?.annotated_image"
+            :loading="isRunning"
+            :original-empty-text="selectedFile ? '等待上传' : (imageBasename ? `原图：${imageBasename}（本机路径无法预览）` : '原图为本机路径，无法在浏览器预览')"
+            result-label="检测结果（红色框 · 已计数）"
+            :show-count-badge="true"
+            :count="countingStore.result.count"
+          />
           <div class="mt-4 flex items-center gap-2">
             <button
               class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-xs text-ink-primary inline-flex items-center gap-1.5"

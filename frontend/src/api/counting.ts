@@ -39,6 +39,19 @@ export interface CountingTaskStatus {
 export const countingApi = {
   submit: (payload: { image_path?: string; image_dir?: string; model_name?: string } & CountingParams) =>
     client.post<unknown, { data: { task_id: string } }>('/counting', payload),
+  submitWithFile: (file: File, model_name?: string, params?: CountingParams) => {
+    const formData = new FormData()
+    formData.append('image', file)
+    if (model_name) formData.append('model_name', model_name)
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) formData.append(k, String(v))
+      })
+    }
+    return client.post<unknown, { data: { task_id: string } }>('/counting', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
   getTask: (task_id: string) => client.get<unknown, { data: CountingTaskStatus }>(`/counting/tasks/${task_id}`),
   getResult: (task_id: string) => client.get<unknown, { data: CountingReport }>(`/counting/tasks/${task_id}/result`),
   history: () => client.get<unknown, { data: any[] }>('/counting/history'),
