@@ -162,6 +162,75 @@ python -m pytest -v            # 63 项测试（核心引擎 TDD + API 接线 + 
 | GET | `/api/counting/history` | 历史计数 |
 | GET | `/api/batches` `/api/processing/tasks` `/api/datasets` | mock 端点（只读） |
 
+## 算法默认参数
+
+> 以下参数汇总自三个来源：**配置** `config/models.yaml`、**前端表单默认值** `frontend/src/views/algo/{Detect,Counting}.vue`、**引擎代码默认值** `backend/core/{detector,counter,clahe,tiling,nms}.py`。
+> 参数生效优先级（detector/counter 内逻辑）：请求参数 > 模型配置（models.yaml）> 引擎内置默认值。
+> ⚠️ 多处来源默认值**不一致**，下表已并列标注，请据此与你的算法工程统一对齐。
+
+### 1）模型级推理参数（config/models.yaml，4 个甘蔗模型共用）
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| imgsz | 640 | 推理输入尺寸 |
+| conf | 0.25 | 检测置信度阈值 |
+| iou | 0.7 | NMS IoU 阈值（模型内，ultralytics 推理阶段） |
+| max_det | 300 | 单张最大检测框数 |
+| half | false | 是否 FP16 半精度 |
+| device | null（自动） | GPU 优先，无则 CPU |
+
+### 2）单图检测（算法广场-单图检测，Detect.vue）
+
+| 参数 | 前端表单默认 | models.yaml | 引擎内置默认(detector.py) | 说明 |
+|------|------|------|------|------|
+| conf | 0.25 | 0.25 | 0.25 | 已统一 |
+| iou | 0.7 | 0.7 | 0.7 | 已统一 |
+| imgsz | 640 | 640 | 640 | 一致 |
+| max_det | 300 | 300 | 300 | 一致 |
+| device | 空 | null | null | 自动 |
+| half | false | false | — | 单图走 engine.predict 未用 half |
+
+> 已移除单图检测前端的分块参数（overlap_ratio / nms_iou），单图无分块逻辑，与后端 detect_api 仅解析 imgsz/conf/iou/max_det/device 保持一致。
+
+### 3）作物计数（算法广场-作物计数，Counting.vue / counter.py）
+
+| 参数 | 前端表单默认 | 引擎内置默认(counter.py) | 说明 |
+|------|------|------|------|
+| conf | 0.25 | （走 detector，见上） | 逐块检测置信度 |
+| iou | 0.7 | （走 detector，见上） | 逐块检测 NMS |
+| imgsz | — | 640 | 逐块检测推理尺寸 |
+| tile_size | 640 | 640 | 滑窗分块边长（px） |
+| overlap_ratio | 0.05 | 0.05 | 分块重叠比例，步长=tile_size×(1-overlap) |
+| nms_iou | 0.5 | 0.5 | **全局 NMS**（合并分块边界重复框），nms.py 默认 0.5 |
+| max_det | 300 | 300 | 已统一 |
+| ground_resolution | 0.85 | 0.85 | 地面分辨率 cm/px，用于面积/密度换算 |
+| grid_n | 8 | 8 | 热力图网格 n×n |
+
+### 4）预处理 / 后处理常量（引擎代码内置，不可配置）
+
+| 参数 | 值 | 位置 |
+|------|-----|------|
+| CLAHE clip_limit | 2.0 | clahe.py |
+| CLAHE grid_size | (8, 8) | clahe.py |
+| 全局 NMS IoU | 0.5 | nms.py（与计数 nms_iou 同源） |
+| 置信度分档（high/mid/low） | ≥0.7 / ≥0.4 / 其余 | counter.py `_conf_dist` |
+
+### 5）后端并发 / 资源常量（config.py）
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| MAX_WORKERS | 1 | TaskManager 并发=1 |
+| LRU_CACHE_SIZE | 3 | 模型引擎实例缓存上限 |
+
+### 待统一的对齐点
+
+1. ~~**conf**~~：✅ 已按 models.yaml=0.25 统一（前端表单 + detector 内置默认均已修正）。
+2. ~~**iou**~~：✅ 已按 models.yaml=0.7 统一（前端表单 + detector 内置默认均已修正）。
+3. ~~**max_det**~~：✅ 计数前端已从 500 对齐为配置 300。
+4. ~~**单图检测分块**~~：✅ 已从前端移除 overlap_ratio / nms_iou（单图无分块逻辑，后端也未接入）。
+
+> 剩余可核对项：单图检测的 half 前端虽可配置但后端未走 engine.predict 的 half 参数（仅 imgsz/conf/iou/max_det/device 生效），若需启用 FP16 需在 detector.py 透传。
+
 ## 后续阶段
 
 - **V2**：数据管理真实化（架次登记/图片扫描/元数据持久化）

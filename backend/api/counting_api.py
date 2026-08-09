@@ -151,7 +151,7 @@ def counting_task_status(task_id):
             "success": False, "data": None, "message": "task_manager 未初始化",
         })
     task = task_manager.get(task_id)
-    if "error" in task:
+    if task.get("error"):
         return jsonify({
             "success": False, "data": None, "message": task["error"],
         }), 404
@@ -167,7 +167,7 @@ def counting_task_result(task_id):
             "success": False, "data": None, "message": "task_manager 未初始化",
         })
     task = task_manager.get(task_id)
-    if "error" in task:
+    if task.get("error"):
         return jsonify({
             "success": False, "data": None, "message": task["error"],
         }), 404

@@ -16,7 +16,7 @@ const navItems = [
 function isActive(section: string): boolean {
   const path = route.path
   if (section === 'index') return path === '/'
-  return path.startsWith('/' + section)
+  return path.split('/')[1] === section
 }
 </script>
 

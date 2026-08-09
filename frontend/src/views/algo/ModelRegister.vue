@@ -18,10 +18,10 @@ const form = reactive({
   weight: '',
   classes: 'Sugarcane Seedling',
   imgsz: 640,
-  conf: 0.4,
-  iou: 0.3,
+  conf: 0.25,
+  iou: 0.7,
   max_det: 300,
-  device: 'auto',
+  device: '',
   half: false,
 })
 
@@ -223,9 +223,9 @@ async function onSubmit() {
                 v-model="form.device"
                 class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
               >
-                <option value="auto">auto</option>
-                <option value="cpu">cpu</option>
-                <option value="cuda:0">cuda:0</option>
+                <option value="">自动（GPU 优先）</option>
+                <option value="cpu">CPU</option>
+                <option value="0">GPU（cuda:0）</option>
               </select>
             </div>
             <div>

@@ -6,9 +6,9 @@ models:
     display_name: "YOLOv5su 甘蔗幼苗"
     category: sugarcane_seedling
     imgsz: 640
-    conf: 0.4
-    iou: 0.3
-    device: auto
+    conf: 0.25
+    iou: 0.7
+    device: null
     classes: ["Sugarcane Seedling"]
     max_det: 300
     half: false
@@ -18,9 +18,9 @@ models:
     display_name: "YOLOv8s 甘蔗幼苗"
     category: sugarcane_seedling
     imgsz: 640
-    conf: 0.4
-    iou: 0.3
-    device: auto
+    conf: 0.25
+    iou: 0.7
+    device: null
     classes: ["Sugarcane Seedling"]
     max_det: 300
     half: false
@@ -30,9 +30,9 @@ models:
     display_name: "YOLOv11s 甘蔗幼苗"
     category: sugarcane_seedling
     imgsz: 640
-    conf: 0.4
-    iou: 0.3
-    device: auto
+    conf: 0.25
+    iou: 0.7
+    device: null
     classes: ["Sugarcane Seedling"]
     max_det: 300
     half: false
@@ -42,9 +42,9 @@ models:
     display_name: "YOLOv12s 甘蔗幼苗"
     category: sugarcane_seedling
     imgsz: 640
-    conf: 0.4
-    iou: 0.3
-    device: auto
+    conf: 0.25
+    iou: 0.7
+    device: null
     classes: ["Sugarcane Seedling"]
     max_det: 300
     half: false

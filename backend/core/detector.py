@@ -1,8 +1,11 @@
 """检测引擎：原子化单图 YOLO 推理。无 CLAHE/分块/NMS合并。"""
 import base64
+import logging
 
 import cv2
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class DetectionEngine:
@@ -20,21 +23,39 @@ class DetectionEngine:
         params = params or {}
         cfg = self.registry.get_config(model_name)
         imgsz = params.get("imgsz", cfg.get("imgsz", 640))
-        conf = params.get("conf", cfg.get("conf", 0.5))
-        iou = params.get("iou", cfg.get("iou", 0.3))
+        conf = params.get("conf", cfg.get("conf", 0.25))
+        iou = params.get("iou", cfg.get("iou", 0.7))
         max_det = params.get("max_det", cfg.get("max_det", 300))
-        device = params.get("device", cfg.get("device", "auto"))
+        device = self._normalize_device(
+            params.get("device", cfg.get("device"))
+        )  # 归一化：'auto'/''/None → None；'cuda:0' → 0
 
         engine = self.registry.get_engine(model_name)
-        results = engine.predict(
-            image,
-            imgsz=imgsz,
-            conf=conf,
-            iou=iou,
-            max_det=max_det,
-            device=device,
-            verbose=False,
-        )
+        try:
+            results = engine.predict(
+                image,
+                imgsz=imgsz,
+                conf=conf,
+                iou=iou,
+                max_det=max_det,
+                device=device,
+                verbose=False,
+            )
+        except Exception as exc:
+            # GPU 间歇性不可用时降级到 CPU 重试（应对 device_count=0）
+            if device not in (None, "cpu") and self._is_cuda_error(exc):
+                logger.warning("GPU 推理失败，降级到 CPU 重试：%s", exc)
+                results = engine.predict(
+                    image,
+                    imgsz=imgsz,
+                    conf=conf,
+                    iou=iou,
+                    max_det=max_det,
+                    device="cpu",
+                    verbose=False,
+                )
+            else:
+                raise
 
         classes = cfg.get("classes", [])
         detection_data = self._parse(results[0], classes)
@@ -48,6 +69,35 @@ class DetectionEngine:
                 "imgsz": imgsz,
             },
         }
+
+    @staticmethod
+    def _normalize_device(device):
+        """将 device 归一化为 ultralytics 可接受的值。
+
+        - None / '' / 'auto' → None（ultralytics 自动选择：GPU 优先，无 GPU 则 CPU）；
+          注：'auto' 字符串在 ultralytics 8.4.60 中无效（select_device 抛 ValueError），
+          必须转为 None。
+        - 'cuda:0' / 'cuda:1' 等 → 0 / 1（int，ultralytics 期望的格式）；
+          'cuda:N' 同样无效，需转为 int N。
+        - 'cpu' → 'cpu'（原样保留）。
+        - '0' / 0 → 0（字符串数字转 int）。
+        """
+        if device is None or device == "" or device == "auto":
+            return None
+        if isinstance(device, str) and device.startswith("cuda:"):
+            try:
+                return int(device.split(":")[1])
+            except (IndexError, ValueError):
+                return 0
+        if isinstance(device, str) and device.isdigit():
+            return int(device)
+        return device
+
+    @staticmethod
+    def _is_cuda_error(exc):
+        """判断异常是否与 CUDA 不可用相关（用于决定是否降级到 CPU）。"""
+        msg = str(exc).lower()
+        return any(k in msg for k in ("cuda", "device", "gpu"))
 
     def _parse(self, result, classes):
         """将 YOLO result 解析为检测字典列表；无框时返回空列表。"""

@@ -75,13 +75,11 @@ watch(
 )
 
 /* ---------------- 推理参数 ---------------- */
-const conf = ref(0.4)
-const iou = ref(0.3)
+const conf = ref(0.25)
+const iou = ref(0.7)
 const imgsz = ref(640)
-const overlapRatio = ref(0.05)
-const nmsIou = ref(0.5)
 const maxDet = ref(300)
-const device = ref<'auto' | 'cpu' | 'cuda:0'>('auto')
+const device = ref<string>('')
 const half = ref<'false' | 'true'>('false')
 
 const canDetect = computed(
@@ -94,8 +92,6 @@ async function onDetect() {
     conf: conf.value,
     iou: iou.value,
     imgsz: imgsz.value,
-    overlap_ratio: overlapRatio.value,
-    nms_iou: nmsIou.value,
     max_det: maxDet.value,
     device: device.value,
     half: half.value === 'true',
@@ -269,10 +265,10 @@ onBeforeUnmount(() => {
                 />
               </div>
             </div>
-            <!-- CLAHE 分块检测 -->
+            <!-- 推理参数 -->
             <div class="pt-3 border-t border-surface-border">
               <div class="text-xs font-medium text-ink-primary mb-2.5 flex items-center gap-1.5">
-                <i class="fa-solid fa-table-cells text-ink-tertiary"></i> CLAHE 分块检测
+                <i class="fa-solid fa-table-cells text-ink-tertiary"></i> 推理参数
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
@@ -280,28 +276,6 @@ onBeforeUnmount(() => {
                   <input
                     type="number"
                     v-model.number="imgsz"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-ink-secondary mb-1.5"
-                    >overlap_ratio</label
-                  >
-                  <input
-                    type="number"
-                    step="0.05"
-                    v-model.number="overlapRatio"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-ink-secondary mb-1.5"
-                    >nms_iou（全局）</label
-                  >
-                  <input
-                    type="number"
-                    step="0.05"
-                    v-model.number="nmsIou"
                     class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm"
                   />
                 </div>
@@ -325,9 +299,9 @@ onBeforeUnmount(() => {
                   v-model="device"
                   class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm"
                 >
-                  <option value="auto">auto</option>
-                  <option value="cpu">cpu</option>
-                  <option value="cuda:0">cuda:0</option>
+                  <option value="">自动（GPU 优先）</option>
+                  <option value="cpu">CPU</option>
+                  <option value="0">GPU（cuda:0）</option>
                 </select>
               </div>
               <div>
