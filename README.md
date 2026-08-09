@@ -50,11 +50,11 @@ project_root/
 
 | 依赖 | 版本 | 说明 |
 |------|------|------|
-| Python | 3.10+ | 后端运行时 |
+| Python | 3.8+ | 后端运行时 |
 | Node.js | 18+ | 前端构建 |
 | NVIDIA GPU | RTX 4060 Ti 16G（推荐） | YOLO 推理加速；CPU 亦可运行 |
-| PyTorch | ≥1.13.0 | `pip install torch`（含 CUDA） |
-| Ultralytics | ≥8.0.0 | `pip install ultralytics` |
+| PyTorch | ≥2.1.0 | `pip install torch`（含 CUDA） |
+| Ultralytics | ≥8.4.60 | `pip install ultralytics` |
 
 > **说明**：未安装 torch/ultralytics 时，系统仍可启动，模型管理/列表/mock 页面正常，但检测与计数推理不可用（API 返回降级提示）。
 
@@ -64,13 +64,13 @@ project_root/
 
 ```
 models/
-├── yolov5su_sugarcane_best.pt
-├── yolov8s_sugarcane_best.pt
-├── yolov11s_sugarcane_best.pt
-└── yolov12s_sugarcane_best.pt
+├── yolov5su_sugarcane.pt
+├── yolov8s_sugarcane.pt
+├── yolo11s_sugarcane.pt
+└── yolo12s_sugarcane.pt
 ```
 
-默认激活模型为 `yolov8s-sugarcane`，可在前端「算法广场 → 算法管理」热切换。
+默认激活模型为 `yolo12s-sugarcane`，可在前端「算法广场 → 算法管理」热切换。
 
 ## 启动方式
 
@@ -88,7 +88,13 @@ models/
 
 ```powershell
 # 终端 1：后端
+# 首次使用请先完成后端环境配置和准备
+# 此处我首先选择和我本地ultralytics相关的环境
+conda create -n uav-vis python=3.8.20 -y
+conda activate uav-vis
 pip install -r requirements.txt
+# 运行后端（日常使用）
+conda activate uav-vis
 python -m backend.app          # Flask :5000
 
 # 终端 2：前端

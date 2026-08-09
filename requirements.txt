@@ -1,9 +1,47 @@
+# -*- coding: utf-8 -*-
+# ============================================================
+# UAV Visual Intelligence System - Python 依赖清单
+# ------------------------------------------------------------
+# 用途：新建专用于本算法工程的 conda 虚拟环境。
+#
+# 版本策略：推理 / 训练相关包（torch、ultralytics、numpy、opencv、
+# Pillow、pyyaml、pytest、scipy、matplotlib、pandas）与训练环境
+# .lqs/env/ultralytics_new.yml 完全对齐（Python 3.8.20 /
+# torch 2.1.0+cu121 / ultralytics 8.4.60），以保证推理与训练
+# 特征一致；Flask 等 Web 框架包为工程额外补充，不影响算法兼容性。
+#
+# 新建 conda 环境推荐流程：
+#   conda create -n uav-vis python=3.8.20 -y
+#   conda activate uav-vis
+#   pip install -r requirements.txt
+#
+# 说明：torch / torchvision / torchaudio 的 +cu121 后缀版本需经
+# PyTorch 官方 cu121 索引获取，已在下方通过 --extra-index-url
+# 声明，pip 会自动匹配对应轮子；其余包走默认 PyPI 索引。
+# ============================================================
+
+# --- PyTorch 生态（与训练环境一致，CUDA 12.1）---
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.1.0+cu121
+torchvision==0.16.0+cu121
+torchaudio==2.1.0+cu121
+
+# --- YOLO 检测框架 ---
+ultralytics==8.4.60
+
+# --- Web 服务（Flask 后端）---
 flask==2.2.3
 flask-cors==4.0.0
-Pillow==9.4.0
-numpy==1.24.2
-opencv-python==4.7.0.72
-ultralytics>=8.0.0
-torch>=1.13.0
-pyyaml==6.0
-pytest>=7.0.0
+werkzeug==2.2.3
+
+# --- 计算机视觉与数值计算 ---
+numpy==1.24.1
+opencv-python==4.13.0.92
+Pillow==10.2.0
+scipy==1.10.1
+matplotlib==3.7.5
+pandas==2.0.3
+
+# --- 配置与测试工具 ---
+pyyaml==6.0.3
+pytest==8.3.5
