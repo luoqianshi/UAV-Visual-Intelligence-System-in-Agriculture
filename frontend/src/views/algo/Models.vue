@@ -64,13 +64,13 @@ async function onSwitch(m: ModelConfig) {
       </div>
       <div class="bg-white border border-surface-border rounded-card p-4">
         <div class="text-xs text-ink-tertiary">最佳 mAP@0.5</div>
-        <div class="text-2xl font-semibold text-brand-700 mt-1">0.876</div>
-        <div class="text-xs text-ink-tertiary mt-1">YOLOv8s-sugarcane</div>
+        <div class="text-2xl font-semibold text-brand-700 mt-1">0.884</div>
+        <div class="text-xs text-ink-tertiary mt-1">YOLO12s-sugarcane</div>
       </div>
       <div class="bg-white border border-surface-border rounded-card p-4">
         <div class="text-xs text-ink-tertiary">推理设备</div>
         <div class="text-2xl font-semibold text-ink-primary mt-1">GPU×1</div>
-        <div class="text-xs text-ink-tertiary mt-1">NVIDIA RTX 4090</div>
+        <div class="text-xs text-ink-tertiary mt-1">NVIDIA RTX 4060 Ti 16G</div>
       </div>
     </div>
 
