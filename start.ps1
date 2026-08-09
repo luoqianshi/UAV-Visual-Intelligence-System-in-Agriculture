@@ -16,10 +16,23 @@ Set-Location $ROOT
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "!!  $msg" -ForegroundColor Yellow }
 
+# ---------- 0. 解析 Python 解释器 ----------
+# 优先使用 uav-vis conda 环境（含 cv2/torch/ultralytics 完整推理能力），
+# 找不到则回退到当前 shell 的默认 python（推理可能不可用）。
+$PY = "python"   # 默认值，后续若找到 uav-vis 则替换为绝对路径
+$envBase = Join-Path $env:USERPROFILE ".conda\envs\uav-vis"
+$envPy = Join-Path $envBase "python.exe"
+if (Test-Path $envPy) {
+    $PY = $envPy
+    Write-Step "检测到 conda 环境: uav-vis"
+} else {
+    Write-Warn "未找到 uav-vis 环境（$envPy），将使用默认 python 运行（推理功能可能不可用）"
+}
+
 # ---------- 1. 环境检查 ----------
 Write-Step "检查运行环境"
 $pythonOk = $false
-try { $pyVer = (python --version 2>&1); Write-Host "    Python: $pyVer"; $pythonOk = $true } catch { Write-Warn "未检测到 Python，请安装 Python 3.10+" }
+try { $pyVer = (& $PY --version 2>&1); Write-Host "    Python: $pyVer"; $pythonOk = $true } catch { Write-Warn "未检测到 Python，请安装 Python 3.10+" }
 try { $nodeVer = (node --version 2>&1); Write-Host "    Node:   $nodeVer" } catch { Write-Warn "未检测到 Node，前端构建需要 Node 18+" }
 
 if (-not $pythonOk) { exit 1 }
@@ -28,18 +41,18 @@ if (-not $pythonOk) { exit 1 }
 Write-Step "检查后端依赖"
 $needInstall = $false
 foreach ($pkg in @("flask", "cv2", "yaml", "numpy")) {
-    python -c "import $pkg" 2>$null
+    & $PY -c "import $pkg" 2>$null
     if ($LASTEXITCODE -ne 0) { $needInstall = $true; break }
 }
 if ($needInstall) {
     Write-Host "    安装 requirements.txt ..."
-    python -m pip install -r requirements.txt
+    & $PY -m pip install -r requirements.txt
 } else {
     Write-Host "    后端依赖已就绪"
 }
 
 # 检测/计数推理依赖（可选，缺失时算法广场 API 以降级模式运行）
-python -c "import torch, ultralytics" 2>$null
+& $PY -c "import torch, ultralytics" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Warn "未检测到 torch / ultralytics：算法广场的检测与计数推理将不可用（模型管理/列表/mock 页面正常）"
     Write-Warn "    如需完整推理功能，请：pip install torch ultralytics"
@@ -75,8 +88,9 @@ if (-not $hasWeights) {
 
 # ---------- 5. 启动服务 ----------
 Write-Step "启动 Flask 服务（http://localhost:5000）"
+Write-Step "后端 Python: $PY"
 $url = "http://localhost:5000"
 # 延迟打开浏览器
 Start-Job -ScriptBlock { param($u) Start-Sleep -Seconds 3; Start-Process $u } -ArgumentList $url | Out-Null
 
-python -m backend.app
+& $PY -m backend.app
