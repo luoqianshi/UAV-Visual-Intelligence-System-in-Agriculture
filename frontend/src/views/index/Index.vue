@@ -279,6 +279,20 @@ onMounted(() => {
                 <div class="text-xs text-ink-tertiary mt-0.5">单图 / 批量检测推理</div>
               </div>
             </router-link>
+            <router-link
+              to="/algo/counting"
+              class="border border-surface-border rounded-card p-4 hover:border-brand-300 hover:bg-brand-50/30 transition flex items-start gap-3"
+            >
+              <div
+                class="w-10 h-10 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700 flex-shrink-0"
+              >
+                <i class="fa-solid fa-calculator text-base"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="text-sm font-semibold text-ink-primary">计数工作台</div>
+                <div class="text-xs text-ink-tertiary mt-0.5">单图 / 批量作物计数</div>
+              </div>
+            </router-link>
           </div>
         </div>
       </div>

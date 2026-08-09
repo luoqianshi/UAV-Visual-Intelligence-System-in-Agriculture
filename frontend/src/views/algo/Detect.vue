@@ -139,19 +139,13 @@ onBeforeUnmount(() => {
 
 <template>
   <AppLayout>
-    <!-- 面包屑 -->
-    <div class="flex items-center gap-1 text-xs text-ink-tertiary mb-2">
-      <router-link to="/algo/models" class="hover:text-brand-700">算法管理</router-link>
-      <i class="fa-solid fa-chevron-right text-[8px]"></i>
-      <span class="text-ink-primary">检测工作台</span>
-    </div>
-
     <!-- 页头 -->
     <div class="flex items-end justify-between mb-4">
       <div>
-        <h1 class="text-2xl font-semibold text-ink-primary">检测工作台</h1>
+        <div class="text-xs text-ink-tertiary mb-1">算法广场</div>
+        <h1 class="text-2xl font-semibold text-ink-primary">作物检测</h1>
         <p class="text-sm text-ink-secondary mt-1">
-          单图 / 批量检测推理 · CLAHE 分块 + 坐标映射 + 全局 NMS
+          单图 / 批量检测推理
         </p>
       </div>
       <div class="flex items-center gap-2 text-xs text-ink-tertiary">

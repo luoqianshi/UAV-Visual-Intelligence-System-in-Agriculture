@@ -26,10 +26,10 @@ function isActive(section: string): boolean {
   >
     <div class="px-5 py-4 border-b border-surface-border">
       <div class="flex items-center gap-2">
-        <span class="text-2xl">🌾</span>
+        <img src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8 flex-shrink-0" />
         <div>
-          <div class="font-semibold text-ink-primary text-base">田间智监</div>
-          <div class="text-xs text-ink-tertiary">UAV 智能监测管理</div>
+          <div class="font-semibold text-ink-primary text-base">田间智瞰</div>
+          <div class="text-xs text-ink-tertiary">UAV智能农业监管系统</div>
         </div>
       </div>
     </div>
