@@ -30,6 +30,8 @@ _COUNTING_PARAM_TYPES = {
     "tile_size": int,
     "overlap_ratio": float,
     "nms_iou": float,
+    "global_conf": float,
+    "batch_size": int,
     "ground_resolution": float,
     "grid_n": int,
     "conf": float,

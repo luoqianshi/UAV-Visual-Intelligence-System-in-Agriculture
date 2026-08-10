@@ -1,10 +1,17 @@
-"""计数引擎：高分辨率原图 CLAHE→分块→逐块检测→坐标映射→全局NMS→计数统计。"""
+"""计数引擎：高分辨率原图 CLAHE→分块→批量检测→坐标映射→全局NMS→全局二次过滤→计数统计。
+
+子块不落盘，内存直传；每块检测结果记入日志与 tile_results，全局计数在
+子块结果基础上经全局合并（NMS）与二次过滤得出。
+"""
 import base64
+import logging
 
 import cv2
 import numpy as np
 
 from core import clahe, tiling, nms
+
+logger = logging.getLogger(__name__)
 
 
 class CountingEngine:
@@ -23,6 +30,8 @@ class CountingEngine:
         tile_size = params.get("tile_size", 640)
         overlap_ratio = params.get("overlap_ratio", 0.05)
         nms_iou = params.get("nms_iou", 0.5)
+        global_conf = params.get("global_conf", 0.5)  # 合并后全局二次过滤，<=0 关闭
+        batch_size = max(int(params.get("batch_size", 8)), 1)
         ground_res = params.get("ground_resolution", 0.85)  # cm/px
         grid_n = params.get("grid_n", 8)
 
@@ -42,19 +51,48 @@ class CountingEngine:
         # ③ 分块
         tiles = tiling.slide_window(enhanced, tile_size, overlap_ratio)
 
-        # ④ 逐块检测 + 坐标映射
+        # ④ 批量分块检测 + 坐标映射 + 子块结果日志
         all_dets = []
-        r = {}
-        for i, (tile, ox, oy) in enumerate(tiles):
-            if on_progress:
-                on_progress("detecting", i + 1, len(tiles))
-            r = self.detector.detect(tile, model_name=model_name, params=params, draw=False)
-            for det in r["detection_data"]:
-                det["bbox"] = tiling.map_to_original(det["bbox"], ox, oy)
-                all_dets.append(det)
+        tile_results = []
+        max_det_reached_tiles = []
+        done = 0
+        total = len(tiles)
+        for start in range(0, total, batch_size):
+            batch = tiles[start:start + batch_size]
+            batch_dets, meta = self._detect_batch_with_fallback(batch, model_name, params)
+            eff_max_det = meta.get("max_det")
+            for (_, ox, oy), dets in zip(batch, batch_dets):
+                idx = start + len(tile_results)
+                reached = eff_max_det is not None and len(dets) >= eff_max_det
+                logger.info(
+                    "子块检测完成：块 %d/%d 偏移=(%d,%d) 检出=%d%s",
+                    idx + 1, total, ox, oy, len(dets),
+                    "（已达 max_det 上限，密植截断风险）" if reached else "",
+                )
+                tile_results.append({
+                    "tile_index": idx,
+                    "offset_x": ox,
+                    "offset_y": oy,
+                    "det_count": len(dets),
+                    "max_det_reached": reached,
+                })
+                if reached:
+                    max_det_reached_tiles.append(idx)
+                for det in dets:
+                    det["bbox"] = tiling.map_to_original(det["bbox"], ox, oy)
+                    all_dets.append(det)
+                done += 1
+                if on_progress:
+                    on_progress("detecting", done, total)
 
-        # ⑤ NMS + 编号
+        # ⑤ 全局合并（NMS）+ 全局 conf 二次过滤 + 编号
         merged = nms.global_nms(all_dets, nms_iou)
+        if global_conf > 0:
+            before = len(merged)
+            merged = [d for d in merged if d["confidence"] >= global_conf]
+            filtered_count = before - len(merged)
+        else:
+            filtered_count = 0
         for idx, det in enumerate(merged, 1):
             det["id"] = idx
 
@@ -65,6 +103,7 @@ class CountingEngine:
 
         # ⑦ 可视化
         annotated = self._draw(original, merged)
+        cfg = self.detector.registry.get_config(model_name)
         return {
             "count": count,
             "density_per_m2": round(density, 2),
@@ -73,11 +112,38 @@ class CountingEngine:
             "confidence_dist": self._conf_dist(merged),
             "detection_data": merged,
             "annotated_image": annotated,
-            "model_info": r.get("model_info"),
+            "model_info": {
+                "name": cfg["name"],
+                "display_name": cfg.get("display_name", cfg["name"]),
+                "imgsz": cfg.get("imgsz", 640),
+            },
             "params_snapshot": params,
             "image_size": [w, h],
             "tile_count": len(tiles),
+            "tile_results": tile_results,
+            "max_det_reached_tiles": max_det_reached_tiles,
+            "filtered_count": filtered_count,
         }
+
+    def _detect_batch_with_fallback(self, batch, model_name, params):
+        """批量推理一批子块；失败时回退为批内逐块串行检测。
+
+        返回 (每块检测列表, meta)，meta 含 max_det（触顶判据）与 model_info。
+        """
+        try:
+            r = self.detector.detect_batch(
+                [tile for tile, _, _ in batch], model_name=model_name, params=params
+            )
+            return r["batch_detections"], r
+        except Exception as exc:
+            logger.warning("批量分块推理失败，回退逐块串行检测：%s", exc)
+            batch_dets = []
+            meta = {}
+            for tile, _, _ in batch:
+                r = self.detector.detect(tile, model_name=model_name, params=params, draw=False)
+                batch_dets.append(r["detection_data"])
+                meta = r
+            return batch_dets, meta
 
     def _heatmap(self, dets, w, h, n):
         """将检测中心点落入 n×n 网格并计数。"""

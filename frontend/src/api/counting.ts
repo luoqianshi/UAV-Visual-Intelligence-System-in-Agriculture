@@ -4,12 +4,22 @@ export interface CountingParams {
   tile_size?: number
   overlap_ratio?: number
   nms_iou?: number
+  global_conf?: number
+  batch_size?: number
   ground_resolution?: number
   grid_n?: number
   conf?: number
   iou?: number
   max_det?: number
   imgsz?: number
+}
+
+export interface TileResult {
+  tile_index: number
+  offset_x: number
+  offset_y: number
+  det_count: number
+  max_det_reached: boolean
 }
 
 export interface CountingReport {
@@ -24,6 +34,9 @@ export interface CountingReport {
   params_snapshot: CountingParams
   image_size: [number, number]
   tile_count: number
+  tile_results?: TileResult[]
+  max_det_reached_tiles?: number[]
+  filtered_count?: number
   result_id?: string
   created_at?: string
 }

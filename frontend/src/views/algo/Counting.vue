@@ -83,10 +83,12 @@ const imagePath = ref('')
 const modelName = ref('')
 const conf = ref(0.25)
 const iou = ref(0.7)
+const max_det = ref(300)
+const global_conf = ref(0.5)
 const tile_size = ref(640)
 const overlap_ratio = ref(0.05)
 const nms_iou = ref(0.5)
-const max_det = ref(1000)
+const batch_size = ref(8)
 const ground_resolution = ref(0.85)
 const grid_n = ref(8)
 
@@ -163,6 +165,16 @@ const heatStats = computed(() => {
 
 const heatN = computed(() => countingStore.result?.params_snapshot?.grid_n || grid_n.value || 8)
 
+// max_det 触顶告警：存在检出数达到单块上限的分块时提示密植截断风险
+const maxDetWarning = computed(() => {
+  const tiles = countingStore.result?.max_det_reached_tiles
+  if (!tiles || tiles.length === 0) return null
+  return {
+    tiles,
+    maxDet: countingStore.result?.params_snapshot?.max_det ?? max_det.value,
+  }
+})
+
 // 相对时间
 function relativeTime(iso?: string): string {
   if (!iso) return '—'
@@ -200,11 +212,13 @@ async function onSubmit() {
       tile_size: tile_size.value,
       overlap_ratio: overlap_ratio.value,
       nms_iou: nms_iou.value,
+      batch_size: batch_size.value,
       ground_resolution: ground_resolution.value,
       grid_n: grid_n.value,
       conf: conf.value,
       iou: iou.value,
       max_det: max_det.value,
+      global_conf: global_conf.value,
     }
     if (selectedFile.value) {
       payload.image = selectedFile.value
@@ -262,6 +276,9 @@ function downloadReport() {
     params_snapshot: r.params_snapshot,
     image_size: r.image_size,
     tile_count: r.tile_count,
+    tile_results: r.tile_results,
+    max_det_reached_tiles: r.max_det_reached_tiles,
+    filtered_count: r.filtered_count,
     generated_at: new Date().toISOString(),
   }
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
@@ -458,7 +475,7 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 推理参数 -->
+            <!-- 推理参数（单次检测） -->
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs font-medium text-ink-primary mb-1.5">conf 置信度</label>
@@ -473,6 +490,23 @@ onUnmounted(() => {
                 <label class="block text-xs font-medium text-ink-primary mb-1.5">iou 阈值</label>
                 <input
                   v-model.number="iou"
+                  type="number"
+                  step="0.05"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-ink-primary mb-1.5">max_det（单块上限）</label>
+                <input
+                  v-model.number="max_det"
+                  type="number"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-ink-primary mb-1.5">global_conf（全局二次过滤）</label>
+                <input
+                  v-model.number="global_conf"
                   type="number"
                   step="0.05"
                   class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
@@ -513,9 +547,9 @@ onUnmounted(() => {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-ink-secondary mb-1.5">max_det</label>
+                  <label class="block text-xs font-medium text-ink-secondary mb-1.5">batch_size（批量推理）</label>
                   <input
-                    v-model.number="max_det"
+                    v-model.number="batch_size"
                     type="number"
                     class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
                   />
@@ -650,6 +684,18 @@ onUnmounted(() => {
               本次仅生成 1 个分块：原图尺寸（{{ countingStore.result.image_size?.[0] }}×{{ countingStore.result.image_size?.[1] }}）
               未超过 tile_size（{{ countingStore.result.params_snapshot?.tile_size ?? 640 }}），整图作为单块送检，未触发滑窗分块。
               如需分块检测，请上传更大尺寸图片或调小 tile_size。
+            </div>
+          </div>
+          <!-- max_det 触顶告警：存在检出数达到单块上限的分块 -->
+          <div
+            v-if="maxDetWarning"
+            class="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-btn text-xs text-amber-700 flex items-start gap-2"
+          >
+            <i class="fa-solid fa-triangle-exclamation mt-0.5 flex-shrink-0"></i>
+            <div>
+              <span class="font-medium">密植截断风险：</span>{{ maxDetWarning.tiles.length }} 个分块的检出数已达到
+              max_det（{{ maxDetWarning.maxDet }}）上限（块索引：{{ maxDetWarning.tiles.join('、') }}），
+              部分目标可能未被计入。建议调大 max_det 或调小 tile_size 后重新检测。
             </div>
           </div>
           <DetectionViewer

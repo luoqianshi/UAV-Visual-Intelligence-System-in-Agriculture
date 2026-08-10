@@ -20,15 +20,7 @@ class DetectionEngine:
         self.registry = registry
 
     def detect(self, image, model_name=None, params=None, draw=True) -> dict:
-        params = params or {}
-        cfg = self.registry.get_config(model_name)
-        imgsz = params.get("imgsz", cfg.get("imgsz", 640))
-        conf = params.get("conf", cfg.get("conf", 0.25))
-        iou = params.get("iou", cfg.get("iou", 0.7))
-        max_det = params.get("max_det", cfg.get("max_det", 300))
-        device = self._normalize_device(
-            params.get("device", cfg.get("device"))
-        )  # 归一化：'auto'/''/None → None；'cuda:0' → 0
+        cfg, imgsz, conf, iou, max_det, device = self._resolve_params(model_name, params)
 
         engine = self.registry.get_engine(model_name)
         try:
@@ -68,7 +60,74 @@ class DetectionEngine:
                 "display_name": cfg.get("display_name", cfg["name"]),
                 "imgsz": imgsz,
             },
+            "max_det": max_det,
         }
+
+    def detect_batch(self, images, model_name=None, params=None) -> dict:
+        """批量推理：一次 predict 传入图像列表，结果与输入顺序一一对应。
+
+        - GPU 失败复用单图的降级 CPU 逻辑；其余异常向上抛出，由调用方
+          （计数引擎）回退逐块串行检测；
+        - 返回 batch_detections（每张图的 detection_data 列表）与实际生效的
+          max_det，供调用方判断块级触顶（检出数 == max_det）。
+        """
+        cfg, imgsz, conf, iou, max_det, device = self._resolve_params(model_name, params)
+        batch_size = (params or {}).get("batch_size") or len(images)
+
+        engine = self.registry.get_engine(model_name)
+        try:
+            results = engine.predict(
+                images,
+                imgsz=imgsz,
+                conf=conf,
+                iou=iou,
+                max_det=max_det,
+                device=device,
+                batch=batch_size,
+                verbose=False,
+            )
+        except Exception as exc:
+            if device not in (None, "cpu") and self._is_cuda_error(exc):
+                logger.warning("GPU 批量推理失败，降级到 CPU 重试：%s", exc)
+                results = engine.predict(
+                    images,
+                    imgsz=imgsz,
+                    conf=conf,
+                    iou=iou,
+                    max_det=max_det,
+                    device="cpu",
+                    batch=batch_size,
+                    verbose=False,
+                )
+            else:
+                raise
+
+        classes = cfg.get("classes", [])
+        return {
+            "batch_detections": [self._parse(r, classes) for r in results],
+            "model_info": {
+                "name": cfg["name"],
+                "display_name": cfg.get("display_name", cfg["name"]),
+                "imgsz": imgsz,
+            },
+            "max_det": max_det,
+        }
+
+    def _resolve_params(self, model_name, params):
+        """解析推理参数：params 优先，其次模型 config，最后内置默认值。
+
+        返回 (cfg, imgsz, conf, iou, max_det, device)，detect 与 detect_batch 共用。
+        """
+        params = params or {}
+        cfg = self.registry.get_config(model_name)
+        imgsz = params.get("imgsz", cfg.get("imgsz", 640))
+        conf = params.get("conf", cfg.get("conf", 0.25))
+        iou = params.get("iou", cfg.get("iou", 0.7))
+        max_det = params.get("max_det", cfg.get("max_det", 300))
+        device = self._normalize_device(
+            params.get("device", cfg.get("device"))
+        )  # 归一化：'auto'/''/None → None；'cuda:0' → 0
+        return cfg, imgsz, conf, iou, max_det, device
 
     @staticmethod
     def _normalize_device(device):

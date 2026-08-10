@@ -190,3 +190,53 @@ def test_detect_class_index_out_of_range():
     assert det["class"] == 5
     # 越界时 class_name 回退为字符串形式的索引
     assert det["class_name"] == "5"
+
+
+# ---------------------------------------------------------------------------
+# 6. detect_batch：图像列表批量推理，结果与输入一一对应
+# ---------------------------------------------------------------------------
+def test_detect_batch_list_and_params():
+    engine = MagicMock()
+    # 两张图：第一张有 1 个框，第二张无检出
+    engine.predict.return_value = [_make_result_one_box(), _make_result_empty()]
+    registry = FakeRegistry(engine)
+    detector = DetectionEngine(registry)
+
+    images = [
+        np.zeros((64, 64, 3), dtype=np.uint8),
+        np.zeros((64, 64, 3), dtype=np.uint8),
+    ]
+    out = detector.detect_batch(images, params={"batch_size": 2, "max_det": 10})
+
+    # batch_detections 与输入顺序对齐
+    assert len(out["batch_detections"]) == 2
+    assert len(out["batch_detections"][0]) == 1
+    assert out["batch_detections"][0][0]["bbox"] == [10.0, 20.0, 50.0, 60.0]
+    assert out["batch_detections"][1] == []
+    # 触顶判据：实际生效的 max_det 透传
+    assert out["max_det"] == 10
+    assert out["model_info"]["name"] == "test"
+
+    # predict 收到图像列表与 batch 参数
+    args, kwargs = engine.predict.call_args
+    assert args[0] is images
+    assert kwargs["batch"] == 2
+    assert kwargs["max_det"] == 10
+    assert kwargs["verbose"] is False
+
+
+# ---------------------------------------------------------------------------
+# 7. detect_batch：未指定 batch_size 时默认整批一次推理
+# ---------------------------------------------------------------------------
+def test_detect_batch_default_batch_size():
+    engine = MagicMock()
+    engine.predict.return_value = [_make_result_empty(), _make_result_empty()]
+    detector = DetectionEngine(FakeRegistry(engine))
+
+    images = [np.zeros((32, 32, 3), dtype=np.uint8) for _ in range(2)]
+    detector.detect_batch(images)
+
+    _, kwargs = engine.predict.call_args
+    assert kwargs["batch"] == 2  # 缺省为 len(images)
+    # config 默认 max_det=300 透传给触顶判据
+    assert kwargs["max_det"] == 300
