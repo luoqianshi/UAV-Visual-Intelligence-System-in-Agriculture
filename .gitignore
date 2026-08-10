@@ -33,3 +33,8 @@ Thumbs.db
 
 # 私人
 .lqs/
+.trae/
+
+# 日志
+.backend_stderr.log
+.backend_stdout.log
