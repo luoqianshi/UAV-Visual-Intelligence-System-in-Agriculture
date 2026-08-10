@@ -91,6 +91,7 @@ const nms_iou = ref(0.5)
 const batch_size = ref(8)
 const ground_resolution = ref(0.85)
 const grid_n = ref(8)
+const saveTiles = ref(false)
 
 const isRunning = computed(
   () => countingStore.status === 'pending' || countingStore.status === 'processing',
@@ -219,6 +220,7 @@ async function onSubmit() {
       iou: iou.value,
       max_det: max_det.value,
       global_conf: global_conf.value,
+      save_tiles: saveTiles.value,
     }
     if (selectedFile.value) {
       payload.image = selectedFile.value
@@ -581,6 +583,23 @@ onUnmounted(() => {
                   />
                 </div>
               </div>
+            </div>
+
+            <!-- 调试选项 -->
+            <div class="pt-3 border-t border-surface-border">
+              <label class="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  v-model="saveTiles"
+                  type="checkbox"
+                  class="mt-0.5 w-4 h-4 accent-brand-700 cursor-pointer"
+                />
+                <div class="flex-1">
+                  <div class="text-xs font-medium text-ink-primary">保存分块调试数据</div>
+                  <div class="text-xs text-ink-tertiary mt-0.5">
+                    开启后将保存所有子块原图及检测框可视化到 results 目录，用于问题排查（会增加磁盘占用）
+                  </div>
+                </div>
+              </label>
             </div>
           </div>
 

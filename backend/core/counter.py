@@ -4,7 +4,9 @@
 子块结果基础上经全局合并（NMS）与二次过滤得出。
 """
 import base64
+import json
 import logging
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -25,7 +27,7 @@ class CountingEngine:
         self.detector = detector
         self.task_manager = task_manager
 
-    def count(self, image, model_name=None, params=None, on_progress=None) -> dict:
+    def count(self, image, model_name=None, params=None, on_progress=None, result_dir=None) -> dict:
         params = params or {}
         tile_size = params.get("tile_size", 640)
         overlap_ratio = params.get("overlap_ratio", 0.05)
@@ -34,6 +36,7 @@ class CountingEngine:
         batch_size = max(int(params.get("batch_size", 8)), 1)
         ground_res = params.get("ground_resolution", 0.85)  # cm/px
         grid_n = params.get("grid_n", 8)
+        save_tiles = params.get("save_tiles", False) and result_dir is not None
 
         # ① 加载原图
         if isinstance(image, str):
@@ -55,13 +58,15 @@ class CountingEngine:
         all_dets = []
         tile_results = []
         max_det_reached_tiles = []
+        tiles_meta_list = []
+        tiles_dir = result_dir / "tiles" if save_tiles else None
         done = 0
         total = len(tiles)
         for start in range(0, total, batch_size):
             batch = tiles[start:start + batch_size]
             batch_dets, meta = self._detect_batch_with_fallback(batch, model_name, params)
             eff_max_det = meta.get("max_det")
-            for (_, ox, oy), dets in zip(batch, batch_dets):
+            for (tile_img, ox, oy), dets in zip(batch, batch_dets):
                 idx = start + len(tile_results)
                 reached = eff_max_det is not None and len(dets) >= eff_max_det
                 logger.info(
@@ -78,12 +83,70 @@ class CountingEngine:
                 })
                 if reached:
                     max_det_reached_tiles.append(idx)
+
+                # —— 分块落盘（调试用）——
+                if save_tiles:
+                    try:
+                        tile_idx_1based = idx + 1
+                        tile_stem = f"tile_{tile_idx_1based:04d}_x{ox}_y{oy}"
+                        tile_file = f"{tile_stem}.jpg"
+                        annotated_file = f"{tile_stem}_annotated.jpg"
+
+                        # 保存子块原图（RGB→BGR）
+                        tile_bgr = cv2.cvtColor(tile_img, cv2.COLOR_RGB2BGR)
+                        cv2.imwrite(str(tiles_dir / tile_file), tile_bgr)
+
+                        # 保存子块检测框可视化（使用局部坐标，映射前）
+                        tile_annotated = self._draw_tile(tile_bgr.copy(), dets)
+                        cv2.imwrite(str(tiles_dir / annotated_file), tile_annotated)
+
+                        # 记录元数据（局部坐标 + 映射后全局坐标）
+                        dets_meta = []
+                        for det in dets:
+                            bbox_local = list(det["bbox"])
+                            bbox_global = tiling.map_to_original(bbox_local, ox, oy)
+                            dets_meta.append({
+                                "bbox_local": [int(v) for v in bbox_local],
+                                "bbox_global": [int(v) for v in bbox_global],
+                                "confidence": float(det.get("confidence", 0)),
+                                "class_id": int(det.get("class_id", 0)),
+                            })
+                        tiles_meta_list.append({
+                            "index": tile_idx_1based,
+                            "offset_x": ox,
+                            "offset_y": oy,
+                            "tile_file": tile_file,
+                            "annotated_file": annotated_file,
+                            "det_count": len(dets),
+                            "max_det_reached": reached,
+                            "detections": dets_meta,
+                        })
+                    except Exception as e:
+                        logger.warning("子块 %d 落盘失败（不影响计数）：%s", idx + 1, e)
+
+                # 坐标映射到全局
                 for det in dets:
                     det["bbox"] = tiling.map_to_original(det["bbox"], ox, oy)
                     all_dets.append(det)
                 done += 1
                 if on_progress:
                     on_progress("detecting", done, total)
+
+        # 写入分块元数据汇总
+        if save_tiles and tiles_meta_list:
+            try:
+                tiles_meta = {
+                    "tile_size": tile_size,
+                    "overlap_ratio": overlap_ratio,
+                    "total_tiles": total,
+                    "tiles": tiles_meta_list,
+                }
+                (result_dir / "tiles_meta.json").write_text(
+                    json.dumps(tiles_meta, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            except Exception as e:
+                logger.warning("tiles_meta.json 写入失败：%s", e)
 
         # ⑤ 全局合并（NMS）+ 全局 conf 二次过滤 + 编号
         merged = nms.global_nms(all_dets, nms_iou)
@@ -189,3 +252,13 @@ class CountingEngine:
             )
         _, buf = cv2.imencode(".jpg", img)
         return base64.b64encode(buf).decode("utf-8")
+
+    def _draw_tile(self, img_bgr, dets):
+        """在子块图像（BGR）上绘制局部坐标检测框，返回标注后的 BGR 图像。
+
+        仅绘制检测框，不绘制编号（避免与全局编号混淆）。
+        """
+        for d in dets:
+            x1, y1, x2, y2 = [int(v) for v in d["bbox"]]
+            cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (53, 57, 229), 2)  # BGR: 红
+        return img_bgr

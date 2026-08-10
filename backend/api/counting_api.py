@@ -10,9 +10,11 @@ import tempfile
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
+from config import RESULTS_DIR
 from core.engine import get_counter, get_task_manager
 from core.result_store import (
     list_counting_history,
@@ -38,7 +40,19 @@ _COUNTING_PARAM_TYPES = {
     "iou": float,
     "max_det": int,
     "imgsz": int,
+    "save_tiles": bool,
 }
+
+
+def _parse_bool(val):
+    """解析布尔值，支持 bool / "true"/"false" / 1/0。"""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return bool(val)
+    if isinstance(val, str):
+        return val.strip().lower() in ("true", "1", "yes", "on")
+    return False
 
 
 def _build_params(body):
@@ -51,7 +65,10 @@ def _build_params(body):
         if val in (None, ""):
             continue
         try:
-            params[key] = cast(val)
+            if cast is bool:
+                params[key] = _parse_bool(val)
+            else:
+                params[key] = cast(val)
         except (TypeError, ValueError):
             continue
     return params
@@ -132,14 +149,29 @@ def counting():
                     pct = 0.0
                 task_manager.update(task_id, progress=pct, status="processing")
 
+            save_tiles = params.get("save_tiles", False)
+            result_dir = None
+            if save_tiles:
+                result_id = (
+                    f"count_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    f"_{uuid.uuid4().hex[:6]}"
+                )
+                result_dir = RESULTS_DIR / result_id
+                tiles_dir = result_dir / "tiles"
+                tiles_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                result_id = None
+
             result = counter.count(
                 image_path, model_name=model_name, params=params,
-                on_progress=on_progress,
+                on_progress=on_progress, result_dir=result_dir,
             )
-            result_id = (
-                f"count_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                f"_{uuid.uuid4().hex[:6]}"
-            )
+
+            if result_id is None:
+                result_id = (
+                    f"count_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    f"_{uuid.uuid4().hex[:6]}"
+                )
             result["result_id"] = result_id
             save_counting_result(result)
             return {
