@@ -86,13 +86,20 @@ models/
 
 ### 方式二：开发模式（双服务器热更新）
 
+### 首次使用先进行环境配置
+
 ```powershell
-# 终端 1：后端
 # 首次使用请先完成后端环境配置和准备
 # 此处我首先选择和我本地ultralytics相关的环境
 conda create -n uav-vis python=3.8.20 -y
 conda activate uav-vis
 pip install -r requirements.txt
+```
+
+### 以下是开发模式日常启动程序
+
+```powershell
+# 终端 1：后端
 # 运行后端（日常使用）
 conda activate uav-vis
 python -m backend.app          # Flask :5000

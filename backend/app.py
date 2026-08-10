@@ -33,6 +33,7 @@ def create_app() -> Flask:
     而非回退到 index.html。改由下方 serve_spa 统一处理静态资源与 SPA 回退。
     """
     app = Flask(__name__)
+    app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB 文件上传限制
 
     # 引擎初始化（Task 9）：失败时降级运行，仅记录警告
     try:

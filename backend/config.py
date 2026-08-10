@@ -18,3 +18,4 @@ MAX_WORKERS = 1       # PRD: 并发=1
 LRU_CACHE_SIZE = 3    # 引擎实例缓存上限
 
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { modelsApi, type ModelConfig } from '@/api/models'
+import { modelsApi, type ModelConfig, type RegisterModelForm } from '@/api/models'
 
 export const useModelStore = defineStore('model', () => {
   const models = ref<ModelConfig[]>([])
@@ -25,8 +25,24 @@ export const useModelStore = defineStore('model', () => {
     return res.data
   }
 
-  async function registerModel(config: Partial<ModelConfig>) {
-    const res = await modelsApi.load(config)
+  async function registerModel(form: RegisterModelForm) {
+    const formData = new FormData()
+    formData.append('name', form.name.trim())
+    formData.append('display_name', form.display_name.trim() || form.name.trim())
+    formData.append('engine', form.engine)
+    formData.append('category', form.category.trim())
+    formData.append('classes', form.classes)
+    formData.append('imgsz', String(form.imgsz))
+    formData.append('conf', String(form.conf))
+    formData.append('iou', String(form.iou))
+    formData.append('max_det', String(form.max_det))
+    if (form.device) {
+      formData.append('device', form.device)
+    }
+    if (form.weight_file) {
+      formData.append('weight_file', form.weight_file)
+    }
+    const res = await modelsApi.register(formData)
     models.value = res.data.models
     currentModel.value = res.data.current_model
     return res.data

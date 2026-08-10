@@ -6,7 +6,6 @@ import SubTabs from '@/components/layout/SubTabs.vue'
 import { useModelStore } from '@/stores/model'
 import type { ModelConfig } from '@/api/models'
 
-// 模型详情页：1:1 迁移 algo/model-detail.html，所有指标字段替换为真实配置
 const route = useRoute()
 const modelStore = useModelStore()
 
@@ -21,13 +20,6 @@ onMounted(async () => {
     await modelStore.fetchModels()
   }
 })
-
-// 从模型名派生短徽标
-function badgeLabel(name: string): string {
-  const m = name.match(/v(\d+)([a-z])/i)
-  if (m) return `Y${m[1]}${m[2].toLowerCase()}`
-  return name.slice(0, 3).toUpperCase()
-}
 
 async function onSwitch() {
   if (!model.value) return
@@ -53,10 +45,25 @@ async function onSwitch() {
       <div>
         <div class="flex items-center gap-3">
           <div
-            class="w-10 h-10 rounded-btn flex items-center justify-center text-white text-sm font-bold"
-            :class="model?.is_active ? 'bg-brand-700' : 'bg-brand-100 text-brand-700'"
+            class="w-10 h-10 rounded-btn flex items-center justify-center"
+            :class="model?.is_active ? 'bg-brand-50' : 'bg-surface-bg'"
           >
-            {{ model ? badgeLabel(model.name) : '?' }}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              :stroke="model?.is_active ? '#10B981' : '#9CA3AF'"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4.6 19.6 H19.4"/>
+              <path d="M12 19.6 V11.6"/>
+              <path d="M12 13.6 C12 10.1 9.5 8.2 6.3 8.3 C6.5 11.8 9.1 13.7 12 13.6"/>
+              <path d="M12 13.6 C12 10.1 14.5 8.2 17.7 8.3 C17.5 11.8 14.9 13.7 12 13.6"/>
+            </svg>
           </div>
           <div>
             <h1 class="text-2xl font-semibold text-ink-primary">{{ model?.display_name || modelName }}</h1>
@@ -110,7 +117,7 @@ async function onSwitch() {
         </div>
         <div class="bg-white border border-surface-border rounded-card p-4">
           <div class="text-xs text-ink-tertiary">推理设备</div>
-          <div class="text-2xl font-semibold text-ink-primary mt-1">{{ model.device }}</div>
+          <div class="text-2xl font-semibold text-ink-primary mt-1">{{ model.device || '自动' }}</div>
         </div>
         <div class="bg-white border border-surface-border rounded-card p-4">
           <div class="text-xs text-ink-tertiary">类别数</div>
@@ -152,11 +159,7 @@ async function onSwitch() {
               </div>
               <div>
                 <div class="text-xs text-ink-tertiary mb-1">推理设备</div>
-                <div class="text-sm font-medium text-ink-primary">{{ model.device }}</div>
-              </div>
-              <div>
-                <div class="text-xs text-ink-tertiary mb-1">FP16 (half)</div>
-                <div class="text-sm font-medium text-ink-primary">{{ model.half }}</div>
+                <div class="text-sm font-medium text-ink-primary">{{ model.device || '自动' }}</div>
               </div>
             </div>
             <div class="mt-4 pt-3 border-t border-surface-border text-xs text-ink-tertiary flex items-center gap-1.5">
@@ -230,8 +233,8 @@ async function onSwitch() {
                 <span class="text-ink-primary">{{ model.conf }} / {{ model.iou }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-ink-tertiary">device / half</span>
-                <span class="text-ink-primary">{{ model.device }} / {{ model.half }}</span>
+                <span class="text-ink-tertiary">device</span>
+                <span class="text-ink-primary">{{ model.device || '自动' }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-ink-tertiary">max_det</span>

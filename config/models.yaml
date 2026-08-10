@@ -1,50 +1,57 @@
 default_model: yolo12s-sugarcane
 models:
-  - name: yolov5su-sugarcane
-    engine: ultralytics
-    weight: models/yolov5su_sugarcane.pt
-    display_name: "YOLOv5su 甘蔗幼苗"
-    category: sugarcane_seedling
-    imgsz: 640
-    conf: 0.25
-    iou: 0.7
-    device: null
-    classes: ["Sugarcane Seedling"]
-    max_det: 300
-    half: false
-  - name: yolov8s-sugarcane
-    engine: ultralytics
-    weight: models/yolov8s_sugarcane.pt
-    display_name: "YOLOv8s 甘蔗幼苗"
-    category: sugarcane_seedling
-    imgsz: 640
-    conf: 0.25
-    iou: 0.7
-    device: null
-    classes: ["Sugarcane Seedling"]
-    max_det: 300
-    half: false
-  - name: yolo11s-sugarcane
-    engine: ultralytics
-    weight: models/yolo11s_sugarcane.pt
-    display_name: "YOLOv11s 甘蔗幼苗"
-    category: sugarcane_seedling
-    imgsz: 640
-    conf: 0.25
-    iou: 0.7
-    device: null
-    classes: ["Sugarcane Seedling"]
-    max_det: 300
-    half: false
-  - name: yolo12s-sugarcane
-    engine: ultralytics
-    weight: models/yolo12s_sugarcane.pt
-    display_name: "YOLOv12s 甘蔗幼苗"
-    category: sugarcane_seedling
-    imgsz: 640
-    conf: 0.25
-    iou: 0.7
-    device: null
-    classes: ["Sugarcane Seedling"]
-    max_det: 300
-    half: false
+- name: yolov5su-sugarcane
+  engine: ultralytics
+  weight: models/yolov5su_sugarcane.pt
+  display_name: YOLOv5su 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolov8s-sugarcane
+  engine: ultralytics
+  weight: models/yolov8s_sugarcane.pt
+  display_name: YOLOv8s 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolo11s-sugarcane
+  engine: ultralytics
+  weight: models/yolo11s_sugarcane.pt
+  display_name: YOLOv11s 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolo12s-sugarcane
+  engine: ultralytics
+  weight: models/yolo12s_sugarcane.pt
+  display_name: YOLOv12s 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolo12n-sugarcane
+  engine: ultralytics
+  weight: models/yolo12n_sugarcane.pt
+  display_name: YOLO12n 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300

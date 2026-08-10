@@ -8,7 +8,7 @@
 """
 import logging
 
-from config import MODELS_YAML, LRU_CACHE_SIZE, MAX_WORKERS
+from config import MODELS_YAML, MODELS_DIR, LRU_CACHE_SIZE, MAX_WORKERS
 from core.registry import ModelRegistry
 from core.task_manager import TaskManager
 
@@ -33,7 +33,7 @@ def init_engines():
     global registry, detector, counter, task_manager
 
     # ① 注册中心：仅依赖 PyYAML，必须成功
-    registry = ModelRegistry(str(MODELS_YAML), lru_size=LRU_CACHE_SIZE)
+    registry = ModelRegistry(str(MODELS_YAML), str(MODELS_DIR), lru_size=LRU_CACHE_SIZE)
     registry.load_from_yaml()
 
     # ② 任务管理器：仅依赖标准库

@@ -4,36 +4,85 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import SubTabs from '@/components/layout/SubTabs.vue'
 import { useModelStore } from '@/stores/model'
+import type { RegisterModelForm } from '@/api/models'
 
-// 注册模型页：1:1 迁移 algo/model-register.html，表单接入 registerModel
 const router = useRouter()
 const modelStore = useModelStore()
 
-// 表单状态（classes 暂存为逗号字符串，提交时转数组）
-const form = reactive({
+// 表单状态
+const form = reactive<RegisterModelForm>({
   name: '',
   display_name: '',
   engine: 'ultralytics',
   category: 'sugarcane_seedling',
-  weight: '',
   classes: 'Sugarcane Seedling',
   imgsz: 640,
   conf: 0.25,
   iou: 0.7,
   max_det: 300,
   device: '',
-  half: false,
+  weight_file: undefined,
 })
 
+const weightFileInput = ref<HTMLInputElement | null>(null)
+const dragOver = ref(false)
 const submitting = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 
-// 表单校验：name 与 weight 必填
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+function onFileSelect(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    form.weight_file = file
+    // 自动填充 name（从文件名推导，如 yolo12s_sugarcane.pt -> yolo12s-sugarcane）
+    if (!form.name) {
+      const baseName = file.name.replace(/\.pt$/i, '').replace(/_/g, '-')
+      form.name = baseName
+    }
+    // 自动填充 display_name
+    if (!form.display_name && form.name) {
+      const match = form.name.match(/(yolo)?v?(\d+)([a-z])?-?(.+)?/i)
+      if (match) {
+        const ver = match[2]
+        const size = (match[3] || '').toUpperCase()
+        form.display_name = `YOLOv${ver}${size} 甘蔗幼苗`
+      }
+    }
+  }
+  target.value = ''
+}
+
+function onDrop(e: DragEvent) {
+  e.preventDefault()
+  dragOver.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (file) {
+    form.weight_file = file
+    if (!form.name) {
+      const baseName = file.name.replace(/\.pt$/i, '').replace(/_/g, '-')
+      form.name = baseName
+    }
+  }
+}
+
+function clearWeightFile() {
+  form.weight_file = undefined
+}
+
+// 表单校验
 const errors = computed(() => {
   const e: Record<string, string> = {}
   if (!form.name.trim()) e.name = 'name 为必填项'
-  if (!form.weight.trim()) e.weight = 'weight 权重路径为必填项'
+  else if (!/^[a-zA-Z0-9_-]+$/.test(form.name.trim()))
+    e.name = 'name 只能包含字母、数字、下划线和连字符'
+  if (!form.weight_file) e.weight_file = '请上传权重文件'
   return e
 })
 
@@ -41,13 +90,14 @@ const classesArray = computed(() =>
   form.classes.split(',').map((s) => s.trim()).filter(Boolean),
 )
 
-// 注册摘要预览（匹配原型右侧摘要卡）
+// 注册摘要预览
 const summary = computed(() => ({
   name: form.name || '—',
   engine: form.engine,
   imgszConf: `${form.imgsz} / ${form.conf}`,
-  deviceHalf: `${form.device} / ${form.half}`,
+  device: form.device || '自动',
   classCount: classesArray.value.length,
+  weightFile: form.weight_file?.name || '—',
 }))
 
 async function onSubmit() {
@@ -60,21 +110,13 @@ async function onSubmit() {
   submitting.value = true
   try {
     await modelStore.registerModel({
+      ...form,
       name: form.name.trim(),
       display_name: form.display_name.trim() || form.name.trim(),
-      engine: form.engine,
-      weight: form.weight.trim(),
       category: form.category.trim(),
-      classes: classesArray.value,
-      imgsz: Number(form.imgsz),
-      conf: Number(form.conf),
-      iou: Number(form.iou),
-      max_det: Number(form.max_det),
-      device: form.device,
-      half: form.half,
     })
-    successMsg.value = `模型「${form.name}」注册成功，即将返回列表…`
-    setTimeout(() => router.push('/algo/models'), 800)
+    successMsg.value = `模型「${form.name}」注册成功，配置已写入 models.yaml，即将返回列表…`
+    setTimeout(() => router.push('/algo/models'), 1000)
   } catch (e: any) {
     errorMsg.value = e?.message || '注册失败，请检查后端服务'
   } finally {
@@ -92,7 +134,9 @@ async function onSubmit() {
       <span class="text-ink-primary">注册模型</span>
     </div>
     <h1 class="text-2xl font-semibold text-ink-primary mb-1">注册新模型</h1>
-    <p class="text-sm text-ink-secondary mb-4">将已训练好的权重动态注册到运行时模型注册中心（不持久化到 YAML），注册后可热切换激活</p>
+    <p class="text-sm text-ink-secondary mb-4">
+      将已训练好的权重上传注册到系统，模型配置将写入 config/models.yaml，权重文件自动重命名保存到 models 目录，注册后可热切换激活
+    </p>
 
     <SubTabs />
 
@@ -118,17 +162,17 @@ async function onSubmit() {
                 <input
                   v-model="form.name"
                   type="text"
-                  placeholder="yolov8s-sugarcane-v4"
+                  placeholder="yolo12s-sugarcane"
                   class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300"
                 />
-                <p class="text-xs text-ink-tertiary mt-1.5">模型唯一标识</p>
+                <p class="text-xs text-ink-tertiary mt-1.5">模型唯一标识，格式：{模型版本}-{类别}，如 yolo12s-sugarcane</p>
               </div>
               <div>
                 <label class="block text-xs font-medium text-ink-primary mb-1.5">display_name</label>
                 <input
                   v-model="form.display_name"
                   type="text"
-                  placeholder="YOLOv8s 甘蔗幼苗 v4"
+                  placeholder="YOLOv12s 甘蔗幼苗"
                   class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
                 />
               </div>
@@ -155,15 +199,52 @@ async function onSubmit() {
                 />
               </div>
             </div>
+            <!-- 权重文件上传 -->
             <div>
-              <label class="block text-xs font-medium text-ink-primary mb-1.5">weight <span class="text-red-500">*</span></label>
+              <label class="block text-xs font-medium text-ink-primary mb-1.5">权重文件 <span class="text-red-500">*</span></label>
               <input
-                v-model="form.weight"
-                type="text"
-                placeholder="models/yolov8s_sugarcane_v4.pt"
-                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300"
+                ref="weightFileInput"
+                type="file"
+                accept=".pt,.pth,.onnx"
+                class="hidden"
+                @change="onFileSelect"
               />
-              <p class="text-xs text-ink-tertiary mt-1.5">权重文件路径（.pt，Ultralytics 格式）</p>
+              <!-- 已选择文件状态 -->
+              <div v-if="form.weight_file" class="border border-brand-300 bg-brand-50/50 rounded-btn p-3 flex items-center gap-3">
+                <div class="w-9 h-9 bg-brand-100 rounded-btn flex items-center justify-center flex-shrink-0">
+                  <i class="fa-solid fa-file-code text-brand-700"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <i class="fa-regular fa-circle-check text-brand-700"></i>
+                    <span class="text-sm font-medium text-ink-primary truncate">{{ form.weight_file.name }}</span>
+                  </div>
+                  <div class="text-xs text-ink-tertiary mt-0.5">
+                    {{ formatSize(form.weight_file.size) }} · 上传后自动重命名为：<span class="font-mono">{{ form.name.replace(/-/g, '_') }}.pt</span>
+                  </div>
+                </div>
+                <button
+                  class="text-ink-tertiary hover:text-red-500 flex-shrink-0 p-1"
+                  title="移除文件"
+                  @click="clearWeightFile"
+                >
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              <!-- 拖放区域 -->
+              <div
+                v-else
+                class="dropzone !p-6"
+                :class="{ 'border-brand-400 bg-brand-50/50': dragOver }"
+                @click="weightFileInput?.click()"
+                @dragover.prevent="dragOver = true"
+                @dragleave="dragOver = false"
+                @drop="onDrop"
+              >
+                <i class="fa-solid fa-cloud-arrow-up text-3xl text-brand-300 mb-2"></i>
+                <div class="text-sm text-ink-primary font-medium">点击选择或拖拽权重文件到此处</div>
+                <div class="text-xs text-ink-tertiary mt-1">支持 .pt 格式（Ultralytics PyTorch 权重），单文件 ≤500MB</div>
+              </div>
             </div>
             <div>
               <label class="block text-xs font-medium text-ink-primary mb-1.5">classes <span class="text-red-500">*</span></label>
@@ -228,17 +309,6 @@ async function onSubmit() {
                 <option value="0">GPU（cuda:0）</option>
               </select>
             </div>
-            <div>
-              <label class="block text-xs font-medium text-ink-primary mb-1.5">half (FP16)</label>
-              <label class="flex items-center gap-2 px-3 py-2 bg-white border border-surface-border rounded-btn text-sm cursor-pointer h-[38px]">
-                <input
-                  v-model="form.half"
-                  type="checkbox"
-                  class="w-4 h-4 accent-brand-700"
-                />
-                <span class="text-ink-primary">{{ form.half ? 'true' : 'false' }}</span>
-              </label>
-            </div>
           </div>
         </div>
       </div>
@@ -257,12 +327,16 @@ async function onSubmit() {
               <span class="text-ink-primary">{{ summary.engine }}</span>
             </div>
             <div class="flex justify-between">
+              <span class="text-ink-tertiary">权重文件</span>
+              <span class="text-ink-primary max-w-[140px] truncate" :title="summary.weightFile">{{ summary.weightFile }}</span>
+            </div>
+            <div class="flex justify-between">
               <span class="text-ink-tertiary">imgsz / conf</span>
               <span class="text-ink-primary">{{ summary.imgszConf }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-ink-tertiary">device / half</span>
-              <span class="text-ink-primary">{{ summary.deviceHalf }}</span>
+              <span class="text-ink-tertiary">device</span>
+              <span class="text-ink-primary">{{ summary.device }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-ink-tertiary">类别数</span>
@@ -271,8 +345,8 @@ async function onSubmit() {
           </div>
           <div class="divider my-4"></div>
           <div class="text-xs text-ink-tertiary mb-3">
-            <i class="fa-solid fa-lightbulb text-amber-500 mr-1"></i>
-            动态注册仅写入内存注册表，不持久化到 models.yaml；注册后可在模型库切换激活
+            <i class="fa-solid fa-circle-info text-brand-500 mr-1"></i>
+            注册后模型配置将写入 config/models.yaml，权重文件保存到 models/ 目录并自动按模型名重命名
           </div>
           <div class="flex gap-2">
             <router-link
@@ -280,7 +354,7 @@ async function onSubmit() {
               class="flex-1 px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-sm text-ink-primary text-center inline-flex items-center justify-center"
             >取消</router-link>
             <button
-              :disabled="submitting"
+              :disabled="submitting || Object.keys(errors).length > 0"
               class="flex-1 px-3 py-2 bg-brand-700 hover:bg-brand-900 text-white rounded-btn text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               @click="onSubmit"
             >

@@ -9,10 +9,9 @@ export interface ModelConfig {
   imgsz: number
   conf: number
   iou: number
-  device: string
+  device: string | null
   classes: string[]
   max_det: number
-  half: boolean
   is_active?: boolean
 }
 
@@ -21,9 +20,23 @@ export interface ModelsResponse {
   current_model: string
 }
 
+export interface RegisterModelForm {
+  name: string
+  display_name: string
+  engine: string
+  category: string
+  classes: string
+  imgsz: number
+  conf: number
+  iou: number
+  max_det: number
+  device: string
+  weight_file?: File
+}
+
 export const modelsApi = {
   list: () => client.get<unknown, { data: ModelsResponse }>('/models'),
   switch: (model_name: string) => client.post<unknown, { data: ModelsResponse }>('/models/switch', { model_name }),
-  load: (config: Partial<ModelConfig>) => client.post<unknown, { data: ModelsResponse }>('/models/load', config),
+  register: (formData: FormData) => client.post<unknown, { data: ModelsResponse }>('/models/load', formData),
   health: () => client.get<unknown, { data: any }>('/health'),
 }

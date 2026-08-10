@@ -80,7 +80,6 @@ const iou = ref(0.7)
 const imgsz = ref(640)
 const maxDet = ref(300)
 const device = ref<string>('')
-const half = ref<'false' | 'true'>('false')
 
 const canDetect = computed(
   () => !!selectedFile.value && !detectStore.loading && !!selectedModel.value,
@@ -94,7 +93,6 @@ async function onDetect() {
     imgsz: imgsz.value,
     max_det: maxDet.value,
     device: device.value,
-    half: half.value === 'true',
   })
 }
 
@@ -285,31 +283,17 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
-            <!-- device / FP16 -->
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-medium text-ink-secondary mb-1.5">device</label>
-                <select
-                  v-model="device"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm"
-                >
-                  <option value="">自动（GPU 优先）</option>
-                  <option value="cpu">CPU</option>
-                  <option value="0">GPU（cuda:0）</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-ink-secondary mb-1.5"
-                  >FP16 (half)</label
-                >
-                <select
-                  v-model="half"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm"
-                >
-                  <option value="false">false</option>
-                  <option value="true">true</option>
-                </select>
-              </div>
+            <!-- device -->
+            <div>
+              <label class="block text-xs font-medium text-ink-secondary mb-1.5">device</label>
+              <select
+                v-model="device"
+                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm"
+              >
+                <option value="">自动（GPU 优先）</option>
+                <option value="cpu">CPU</option>
+                <option value="0">GPU（cuda:0）</option>
+              </select>
             </div>
           </div>
           <button

@@ -5,21 +5,12 @@ import SubTabs from '@/components/layout/SubTabs.vue'
 import { useModelStore } from '@/stores/model'
 import type { ModelConfig } from '@/api/models'
 
-// 算法管理列表页：1:1 迁移 algo/models.html，表格接入真实 modelStore 数据
 const modelStore = useModelStore()
 
 onMounted(() => {
   modelStore.fetchModels()
 })
 
-// 从模型名派生短徽标（yolov8s-sugarcane → Y8s），匹配原型表格首列图标样式
-function badgeLabel(name: string): string {
-  const m = name.match(/v(\d+)([a-z])/i)
-  if (m) return `Y${m[1]}${m[2].toLowerCase()}`
-  return name.slice(0, 3).toUpperCase()
-}
-
-// 激活当前模型
 async function onSwitch(m: ModelConfig) {
   try {
     await modelStore.switchModel(m.name)
@@ -98,10 +89,25 @@ async function onSwitch(m: ModelConfig) {
             <td class="py-3 px-4">
               <div class="flex items-center gap-2">
                 <div
-                  class="w-7 h-7 rounded-btn flex items-center justify-center text-white text-[10px] font-bold"
-                  :class="m.is_active ? 'bg-brand-700' : 'bg-brand-100 text-brand-700'"
+                  class="w-7 h-7 rounded-btn flex items-center justify-center"
+                  :class="m.is_active ? 'bg-brand-50' : 'bg-surface-bg'"
                 >
-                  {{ badgeLabel(m.name) }}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    :stroke="m.is_active ? '#10B981' : '#9CA3AF'"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4.6 19.6 H19.4"/>
+                    <path d="M12 19.6 V11.6"/>
+                    <path d="M12 13.6 C12 10.1 9.5 8.2 6.3 8.3 C6.5 11.8 9.1 13.7 12 13.6"/>
+                    <path d="M12 13.6 C12 10.1 14.5 8.2 17.7 8.3 C17.5 11.8 14.9 13.7 12 13.6"/>
+                  </svg>
                 </div>
                 <div>
                   <router-link
