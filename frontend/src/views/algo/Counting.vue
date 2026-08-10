@@ -86,7 +86,7 @@ const iou = ref(0.7)
 const tile_size = ref(640)
 const overlap_ratio = ref(0.05)
 const nms_iou = ref(0.5)
-const max_det = ref(300)
+const max_det = ref(1000)
 const ground_resolution = ref(0.85)
 const grid_n = ref(8)
 
