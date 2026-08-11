@@ -179,3 +179,32 @@ def scan_path():
         "data": result,
         "message": result.get("message", ""),
     }), status
+
+
+@batches_bp.route("/api/batches/pick-folder", methods=["POST"])
+def pick_folder():
+    """POST /api/batches/pick-folder → 弹出系统原生文件夹选择对话框，返回所选绝对路径。"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return _error("当前环境未安装 tkinter，无法弹出系统对话框，请手动输入路径", 500)
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        folder = filedialog.askdirectory(title="选择 UAV 架次图片文件夹")
+        root.destroy()
+    except Exception as exc:
+        return _error(f"打开文件夹对话框失败: {exc}", 500)
+    if not folder:
+        return jsonify({
+            "success": False,
+            "data": {"cancelled": True},
+            "message": "用户取消选择",
+        }), 200
+    return jsonify({
+        "success": True,
+        "data": {"path": folder.replace("\\", "/")},
+        "message": "文件夹选择成功",
+    })

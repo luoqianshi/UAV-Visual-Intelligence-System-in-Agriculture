@@ -444,8 +444,8 @@ class BatchRegistry:
 
     def _infer_metadata(self, folder_name: str, folder_path: Path) -> dict:
         """从文件夹名推断元数据。"""
-        # 尝试解析 {crop}_{date}_{altitude}m 格式
-        pattern = r'^([a-zA-Z]+)_(\d{8})_(\d+)m$'
+        # 尝试解析 {crop}_{date}_{altitude}m[_seq] 格式（新格式新增可选编号段）
+        pattern = r'^([a-zA-Z]+)_(\d{8})_(\d+)(?:m)?(?:_(\d+))?$'
         m = re.match(pattern, folder_name)
         crop_type = "未知作物"
         flight_date = ""

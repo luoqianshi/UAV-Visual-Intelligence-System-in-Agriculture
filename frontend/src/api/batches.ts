@@ -89,4 +89,7 @@ export const batchesApi = {
 
   scanPath: (image_folder_path: string) =>
     client.post<unknown, { data: ScanResult }>('/batches/scan', { image_folder_path }),
+
+  pickFolder: () =>
+    client.post<unknown, { data: { cancelled?: boolean; path?: string } }>('/batches/pick-folder', {}),
 }

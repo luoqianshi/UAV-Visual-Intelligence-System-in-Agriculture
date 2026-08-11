@@ -2,8 +2,10 @@
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/common/Icon.vue'
 import { batchesApi } from '@/api/batches'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+
+const CUSTOM_CROPS_KEY = 'uav_vis_custom_crops'
 
 const router = useRouter()
 
@@ -22,12 +24,48 @@ const overlapSide = ref(0.7)
 
 const submitting = ref(false)
 const scanning = ref(false)
+const picking = ref(false)
 const successMsg = ref('')
 const errorMsg = ref('')
 const scanResult = ref<{ valid: boolean; image_count: number; total_size_bytes: number; formats: string[]; message?: string } | null>(null)
 
 const cropOptions = ['甘蔗', '玉米', '小麦', '水稻']
+const customCropOptions = ref<string[]>([])
 const droneOptions = ['DJI Mavic 3 M', 'DJI Mavic 3', 'DJI Phantom 4 Pro', '其他']
+
+const allCropOptions = computed(() => {
+  const merged = [...cropOptions, ...customCropOptions.value]
+  return Array.from(new Set(merged))
+})
+
+onMounted(() => {
+  try {
+    const raw = localStorage.getItem(CUSTOM_CROPS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        customCropOptions.value = parsed.filter((x) => typeof x === 'string' && x.trim())
+      }
+    }
+  } catch {
+    // 忽略损坏的 localStorage 数据
+  }
+})
+
+watch(
+  () => form.value.crop_type,
+  (val) => {
+    const v = (val || '').trim()
+    if (!v) return
+    if (allCropOptions.value.includes(v)) return
+    customCropOptions.value = [...customCropOptions.value, v]
+    try {
+      localStorage.setItem(CUSTOM_CROPS_KEY, JSON.stringify(customCropOptions.value))
+    } catch {
+      // localStorage 可能已满或不可用，忽略
+    }
+  }
+)
 
 const canSubmit = computed(() =>
   form.value.batch_name && form.value.crop_type && form.value.flight_date &&
@@ -54,6 +92,27 @@ async function doScan() {
     scanResult.value = null
   } finally {
     scanning.value = false
+  }
+}
+
+async function doPick() {
+  picking.value = true
+  errorMsg.value = ''
+  successMsg.value = ''
+  try {
+    const res = await batchesApi.pickFolder()
+    if (res.data?.cancelled) return
+    const picked = res.data?.path
+    if (!picked) {
+      errorMsg.value = '未获取到所选路径'
+      return
+    }
+    imagePath.value = picked
+    await doScan()
+  } catch (e: any) {
+    errorMsg.value = e.message || '打开文件夹对话框失败'
+  } finally {
+    picking.value = false
   }
 }
 
@@ -143,15 +202,22 @@ function formatBytes(bytes: number): string {
           <div class="space-y-4">
             <div>
               <label class="block text-xs font-medium text-ink-primary mb-1.5">架次名称 <span class="text-red-500">*</span></label>
-              <input v-model="form.batch_name" type="text" placeholder="如：sugarcane_20260805_001" class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300" />
-              <p class="text-xs text-ink-tertiary mt-1.5">建议格式：<code class="px-1 py-0.5 bg-surface-hover rounded">作物_采集日期_编号</code></p>
+              <input v-model="form.batch_name" type="text" placeholder="如：sugarcane_20260805_5_001" class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300" />
+              <p class="text-xs text-ink-tertiary mt-1.5">建议格式：<code class="px-1 py-0.5 bg-surface-hover rounded">作物_采集日期_采集高度_编号</code></p>
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-medium text-ink-primary mb-1.5">作物类型 <span class="text-red-500">*</span></label>
-                <select v-model="form.crop_type" class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm">
-                  <option v-for="c in cropOptions" :key="c" :value="c">{{ c }}</option>
-                </select>
+                <input
+                  v-model="form.crop_type"
+                  list="cropList"
+                  type="text"
+                  placeholder="选择或输入新作物"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                />
+                <datalist id="cropList">
+                  <option v-for="c in allCropOptions" :key="c" :value="c" />
+                </datalist>
               </div>
               <div>
                 <label class="block text-xs font-medium text-ink-primary mb-1.5">采集日期 <span class="text-red-500">*</span></label>
@@ -183,6 +249,9 @@ function formatBytes(bytes: number): string {
               <Icon name="folder-open" :size="14" class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-tertiary" />
               <input v-model="imagePath" type="text" placeholder="如：D:/data/sugarcane_images" class="w-full pl-9 pr-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300" />
             </div>
+            <button @click="doPick" :disabled="picking" class="px-4 py-2 bg-white border border-surface-border hover:bg-surface-hover text-brand-700 rounded-btn text-sm font-medium inline-flex items-center gap-1.5">
+              <Icon name="folder-open" :size="12" /> {{ picking ? '选择中…' : '选择' }}
+            </button>
             <button @click="doScan" :disabled="scanning" class="px-4 py-2 bg-brand-700 hover:bg-brand-900 disabled:opacity-50 text-white rounded-btn text-sm font-medium inline-flex items-center gap-1.5">
               <Icon name="search" :size="12" /> {{ scanning ? '扫描中…' : '扫描' }}
             </button>
