@@ -7,6 +7,7 @@ import { useCountingStore } from '@/stores/counting'
 import { useModelStore } from '@/stores/model'
 import HeatmapChart from '@/components/algo/HeatmapChart.vue'
 import ConfidenceDistChart from '@/components/algo/ConfidenceDistChart.vue'
+import Icon from '@/components/common/Icon.vue'
 
 // 作物计数工作台：支持文件上传预览 + 本机路径双模式
 const countingStore = useCountingStore()
@@ -84,15 +85,15 @@ const modelName = ref('')
 const conf = ref(0.25)
 const iou = ref(0.7)
 const max_det = ref(300)
-const global_conf = ref(0.0)
+const global_conf = ref(0.5)
 const tile_size = ref(640)
 const overlap_ratio = ref(0.05)
 const nms_iou = ref(0.5)
-const batch_size = ref(8)
+const batch_size = ref(16)
 const ground_resolution = ref(0.85)
 const grid_n = ref(8)
 const saveTiles = ref(false)
-const enhance = ref(false)
+const enhance = ref(true)
 
 const isRunning = computed(
   () => countingStore.status === 'pending' || countingStore.status === 'processing',
@@ -314,18 +315,17 @@ onUnmounted(() => {
 
 <template>
   <AppLayout>
-    <!-- 页头 -->
-    <div class="flex items-end justify-between mb-4">
+    <div class="flex items-end justify-between mb-5">
       <div>
         <div class="text-xs text-ink-tertiary mb-1">算法广场</div>
-        <h1 class="text-2xl font-semibold text-ink-primary">作物计数</h1>
-        <p class="text-sm text-ink-secondary mt-1">
+        <h1 class="text-2xl font-bold text-ink-primary tracking-tight">作物计数</h1>
+        <p class="text-sm text-ink-secondary mt-1.5">
           检测算法对原图进行检测与计数 · 甘蔗幼苗株数统计案例应用
         </p>
       </div>
       <div class="flex items-center gap-2 text-xs text-ink-tertiary">
         <span>当前激活：</span>
-        <span class="text-brand-700 font-medium">{{ activeModelDisplay }}</span>
+        <span class="text-brand-700 font-semibold">{{ activeModelDisplay }}</span>
         <router-link to="/algo/models" class="text-brand-700 hover:underline">切换</router-link>
       </div>
     </div>
@@ -341,10 +341,10 @@ onUnmounted(() => {
       >
         <div class="flex items-center justify-between text-xs mb-2">
           <span class="text-ink-secondary inline-flex items-center gap-1.5">
-            <i class="fa-solid fa-circle-notch fa-spin text-brand-700"></i>
+            <Icon name="spinner" :size="14" class="text-brand-700 animate-spin-slow" />
             {{ statusText }}
           </span>
-          <span class="text-brand-700 font-medium">{{ Math.round(countingStore.progress * 100) }}%</span>
+          <span class="text-brand-700 font-semibold font-numeric">{{ Math.round(countingStore.progress * 100) }}%</span>
         </div>
         <div class="progress">
           <div
@@ -355,9 +355,9 @@ onUnmounted(() => {
       </div>
       <div
         v-if="countingStore.error"
-        class="bg-red-50 border border-red-200 rounded-card p-3 flex items-start gap-2 text-sm text-red-700"
+        class="bg-red-50 border border-red-200 rounded-card p-3 flex items-start gap-2.5 text-sm text-red-700"
       >
-        <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+        <Icon name="warning" :size="16" class="mt-0.5 flex-shrink-0" />
         <div class="flex-1">{{ countingStore.error }}</div>
       </div>
     </div>
@@ -376,7 +376,7 @@ onUnmounted(() => {
             @dragleave="onDragLeave"
             @drop="onDrop"
           >
-            <i class="fa-solid fa-cloud-arrow-up text-3xl text-brand-300 mb-2"></i>
+            <Icon name="upload" :size="36" class="text-brand-300 mb-2" />
             <div class="text-sm text-ink-primary font-medium">
               拖拽原图到此处，或点击选择
             </div>
@@ -399,21 +399,21 @@ onUnmounted(() => {
             />
             <div class="text-xs text-ink-tertiary flex-1 min-w-0">
               <div class="flex items-center gap-1.5">
-                <i class="fa-regular fa-circle-check text-brand-700"></i>
+                <Icon name="validate" :size="14" class="text-brand-700 flex-shrink-0" />
                 <span class="text-ink-primary font-medium truncate">{{ selectedFile.name }}</span>
               </div>
-              <div class="mt-0.5">
+              <div class="mt-0.5 font-numeric">
                 {{ formatSize(selectedFile.size) }}<span v-if="imgDimensions">
                   · {{ imgDimensions.w }}×{{ imgDimensions.h }}</span
                 >
               </div>
             </div>
             <button
-              class="text-ink-tertiary hover:text-ink-primary flex-shrink-0"
+              class="text-ink-tertiary hover:text-ink-primary flex-shrink-0 p-1 rounded hover:bg-surface-hover transition-colors"
               title="移除"
               @click="clearFile"
             >
-              <i class="fa-solid fa-xmark"></i>
+              <Icon name="close" :size="16" />
             </button>
           </div>
           <!-- 本机路径输入（可选，用于服务器端路径模式） -->
@@ -456,7 +456,7 @@ onUnmounted(() => {
             v-if="imageBasename && !selectedFile"
             class="mt-3 text-xs text-ink-tertiary flex items-center gap-1.5"
           >
-            <i class="fa-regular fa-circle-check text-brand-700"></i>
+            <Icon name="validate" :size="14" class="text-brand-700 flex-shrink-0" />
             已选择路径：<span class="text-ink-primary font-medium font-mono">{{ imageBasename }}</span>
           </div>
         </div>
@@ -487,7 +487,7 @@ onUnmounted(() => {
                   v-model.number="conf"
                   type="number"
                   step="0.05"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                 />
               </div>
               <div>
@@ -496,7 +496,7 @@ onUnmounted(() => {
                   v-model.number="iou"
                   type="number"
                   step="0.05"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                 />
               </div>
               <div>
@@ -504,7 +504,7 @@ onUnmounted(() => {
                 <input
                   v-model.number="max_det"
                   type="number"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                 />
               </div>
             </div>
@@ -512,7 +512,7 @@ onUnmounted(() => {
             <!-- 分块检测 -->
             <div class="pt-3 border-t border-surface-border">
               <div class="text-xs font-medium text-ink-primary mb-2.5 flex items-center gap-1.5">
-                <i class="fa-solid fa-table-cells text-ink-tertiary"></i> 分块检测
+                <Icon name="grid" :size="14" class="text-ink-tertiary" /> 分块检测
               </div>
               <label class="flex items-start gap-2.5 cursor-pointer mb-3">
                 <input
@@ -522,9 +522,6 @@ onUnmounted(() => {
                 />
                 <div class="flex-1">
                   <div class="text-xs font-medium text-ink-primary">CLAHE 预处理增强</div>
-                  <div class="text-xs text-ink-tertiary mt-0.5">
-                    对原图做 CLAHE 对比度增强后再分块检测。默认关闭——模型训练未用 CLAHE，开启可能致分布偏移、压低置信度；仅在光照严重不均时启用
-                  </div>
                 </div>
               </label>
               <div class="grid grid-cols-2 gap-3">
@@ -533,7 +530,7 @@ onUnmounted(() => {
                   <input
                     v-model.number="tile_size"
                     type="number"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                   />
                 </div>
                 <div>
@@ -542,7 +539,7 @@ onUnmounted(() => {
                     v-model.number="overlap_ratio"
                     type="number"
                     step="0.05"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                   />
                 </div>
                 <div>
@@ -551,7 +548,7 @@ onUnmounted(() => {
                     v-model.number="global_conf"
                     type="number"
                     step="0.05"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                   />
                 </div>
                 <div>
@@ -560,7 +557,7 @@ onUnmounted(() => {
                     v-model.number="nms_iou"
                     type="number"
                     step="0.05"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                   />
                 </div>
                 <div>
@@ -568,7 +565,7 @@ onUnmounted(() => {
                   <input
                     v-model.number="batch_size"
                     type="number"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                   />
                 </div>
               </div>
@@ -577,7 +574,7 @@ onUnmounted(() => {
             <!-- 计数统计参数 -->
             <div class="pt-3 border-t border-surface-border">
               <div class="text-xs font-medium text-ink-primary mb-2.5 flex items-center gap-1.5">
-                <i class="fa-solid fa-ruler-combined text-ink-tertiary"></i> 计数统计参数
+                <Icon name="ruler" :size="14" class="text-ink-tertiary" /> 计数统计参数
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
@@ -586,7 +583,7 @@ onUnmounted(() => {
                     v-model.number="ground_resolution"
                     type="number"
                     step="0.01"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                   />
                 </div>
                 <div>
@@ -594,7 +591,7 @@ onUnmounted(() => {
                   <input
                     v-model.number="grid_n"
                     type="number"
-                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 font-numeric"
                   />
                 </div>
               </div>
@@ -609,7 +606,10 @@ onUnmounted(() => {
                   class="mt-0.5 w-4 h-4 accent-brand-700 cursor-pointer"
                 />
                 <div class="flex-1">
-                  <div class="text-xs font-medium text-ink-primary">保存分块调试数据</div>
+                  <div class="text-xs font-medium text-ink-primary flex items-center gap-1.5">
+                    <Icon name="wrench" :size="12" class="text-ink-tertiary" />
+                    保存分块调试数据
+                  </div>
                   <div class="text-xs text-ink-tertiary mt-0.5">
                     开启后将保存所有子块原图及检测框可视化到 results 目录，用于问题排查（会增加磁盘占用）
                   </div>
@@ -621,10 +621,10 @@ onUnmounted(() => {
           <!-- 执行按钮 -->
           <button
             :disabled="!canSubmit"
-            class="w-full mt-4 px-4 py-2.5 bg-brand-700 hover:bg-brand-900 text-white rounded-btn text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full mt-4 px-4 py-2.5 bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white rounded-btn text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             @click="onSubmit"
           >
-            <i class="fa-solid fa-calculator text-xs"></i>
+            <Icon name="count" :size="14" />
             {{ isRunning ? '检测中…' : '执行检测与计数' }}
           </button>
         </div>
@@ -634,58 +634,58 @@ onUnmounted(() => {
       <div class="col-span-2 space-y-5">
         <!-- 计数总览 4 卡片 -->
         <div v-if="countingStore.result" class="grid grid-cols-4 gap-4">
-          <div class="bg-white border border-surface-border rounded-card p-4">
+          <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
             <div class="flex items-center justify-between">
               <div>
                 <div class="text-xs text-ink-tertiary">计数总数</div>
-                <div class="text-2xl font-semibold text-brand-700 mt-1">
+                <div class="text-2xl font-bold text-brand-700 mt-1 font-numeric">
                   {{ countingStore.result.count ?? '—' }}
                   <span class="text-sm text-ink-tertiary font-normal">株</span>
                 </div>
               </div>
               <div class="w-9 h-9 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700">
-                <i class="fa-solid fa-seedling text-sm"></i>
+                <Icon name="seedling" :size="18" />
               </div>
             </div>
           </div>
-          <div class="bg-white border border-surface-border rounded-card p-4">
+          <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
             <div class="flex items-center justify-between">
               <div>
                 <div class="text-xs text-ink-tertiary">平均密度</div>
-                <div class="text-2xl font-semibold text-ink-primary mt-1">
+                <div class="text-2xl font-bold text-ink-primary mt-1 font-numeric">
                   {{ countingStore.result.density_per_m2 ?? '—' }}
                   <span class="text-sm text-ink-tertiary font-normal">株/m²</span>
                 </div>
               </div>
               <div class="w-9 h-9 rounded-btn bg-blue-50 flex items-center justify-center text-blue-600">
-                <i class="fa-solid fa-chart-area text-sm"></i>
+                <Icon name="gauge" :size="18" />
               </div>
             </div>
           </div>
-          <div class="bg-white border border-surface-border rounded-card p-4">
+          <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
             <div class="flex items-center justify-between">
               <div>
                 <div class="text-xs text-ink-tertiary">覆盖面积</div>
-                <div class="text-2xl font-semibold text-ink-primary mt-1">
+                <div class="text-2xl font-bold text-ink-primary mt-1 font-numeric">
                   {{ countingStore.result.area_m2 ?? '—' }}
                   <span class="text-sm text-ink-tertiary font-normal">m²</span>
                 </div>
               </div>
               <div class="w-9 h-9 rounded-btn bg-amber-50 flex items-center justify-center text-amber-600">
-                <i class="fa-solid fa-vector-square text-sm"></i>
+                <Icon name="grid" :size="18" />
               </div>
             </div>
           </div>
-          <div class="bg-white border border-surface-border rounded-card p-4">
+          <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
             <div class="flex items-center justify-between">
               <div>
                 <div class="text-xs text-ink-tertiary">平均置信度</div>
-                <div class="text-2xl font-semibold text-ink-primary mt-1">
+                <div class="text-2xl font-bold text-ink-primary mt-1 font-numeric">
                   {{ avgConfidence != null ? avgConfidence.toFixed(2) : '—' }}
                 </div>
               </div>
               <div class="w-9 h-9 rounded-btn bg-purple-50 flex items-center justify-center text-purple-600">
-                <i class="fa-solid fa-bullseye text-sm"></i>
+                <Icon name="target" :size="18" />
               </div>
             </div>
           </div>
@@ -696,16 +696,16 @@ onUnmounted(() => {
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-semibold text-ink-primary">检测结果与计数标注</h3>
             <div class="flex items-center gap-4 text-xs">
-              <span class="text-ink-tertiary">
+              <span class="text-ink-tertiary font-numeric">
                 图像尺寸
-                <span class="text-ink-primary font-medium">
+                <span class="text-ink-primary font-semibold">
                   {{ countingStore.result.image_size ? `${countingStore.result.image_size[0]}×${countingStore.result.image_size[1]}` : '—' }}
                 </span>
               </span>
-              <span class="text-ink-tertiary">
-                分块数 <span class="text-ink-primary font-medium">{{ countingStore.result.tile_count ?? '—' }}</span>
+              <span class="text-ink-tertiary font-numeric">
+                分块数 <span class="text-ink-primary font-semibold">{{ countingStore.result.tile_count ?? '—' }}</span>
               </span>
-              <span class="text-brand-700 font-medium">计数 {{ countingStore.result.count ?? '—' }} 株</span>
+              <span class="text-brand-700 font-semibold">计数 {{ countingStore.result.count ?? '—' }} 株</span>
             </div>
           </div>
           <!-- 分块未触发提示：tile_count=1 时说明原图未超过 tile_size -->
@@ -713,7 +713,7 @@ onUnmounted(() => {
             v-if="countingStore.result && countingStore.result.tile_count === 1"
             class="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-btn text-xs text-amber-700 flex items-start gap-2"
           >
-            <i class="fa-solid fa-circle-info mt-0.5 flex-shrink-0"></i>
+            <Icon name="info" :size="14" class="mt-0.5 flex-shrink-0" />
             <div>
               本次仅生成 1 个分块：原图尺寸（{{ countingStore.result.image_size?.[0] }}×{{ countingStore.result.image_size?.[1] }}）
               未超过 tile_size（{{ countingStore.result.params_snapshot?.tile_size ?? 640 }}），整图作为单块送检，未触发滑窗分块。
@@ -725,7 +725,7 @@ onUnmounted(() => {
             v-if="maxDetWarning"
             class="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-btn text-xs text-amber-700 flex items-start gap-2"
           >
-            <i class="fa-solid fa-triangle-exclamation mt-0.5 flex-shrink-0"></i>
+            <Icon name="warning" :size="14" class="mt-0.5 flex-shrink-0" />
             <div>
               <span class="font-medium">密植截断风险：</span>{{ maxDetWarning.tiles.length }} 个分块的检出数已达到
               max_det（{{ maxDetWarning.maxDet }}）上限（块索引：{{ maxDetWarning.tiles.join('、') }}），
@@ -743,22 +743,22 @@ onUnmounted(() => {
           />
           <div class="mt-4 flex items-center gap-2">
             <button
-              class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-xs text-ink-primary inline-flex items-center gap-1.5"
+              class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-xs text-ink-primary inline-flex items-center gap-1.5 font-medium"
               @click="downloadAnnotated"
             >
-              <i class="fa-solid fa-download text-[10px]"></i> 下载结果图
+              <Icon name="download" :size="12" /> 下载结果图
             </button>
             <button
-              class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-xs text-ink-primary inline-flex items-center gap-1.5"
+              class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-xs text-ink-primary inline-flex items-center gap-1.5 font-medium"
               @click="downloadJson"
             >
-              <i class="fa-solid fa-file-code text-[10px]"></i> 导出 counting_data.json
+              <Icon name="file-code" :size="12" /> 导出 counting_data.json
             </button>
             <button
-              class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-xs text-ink-primary inline-flex items-center gap-1.5"
+              class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-xs text-ink-primary inline-flex items-center gap-1.5 font-medium"
               @click="downloadReport"
             >
-              <i class="fa-solid fa-file-excel text-[10px]"></i> 导出计数报告
+              <Icon name="file-excel" :size="12" /> 导出计数报告
             </button>
           </div>
         </div>
@@ -770,7 +770,7 @@ onUnmounted(() => {
             将原图按 {{ heatN }}×{{ heatN }} 网格划分，统计各区域计数分布（株/格）
           </p>
           <HeatmapChart :data="countingStore.result.heatmap" :n="heatN" />
-          <div class="mt-3 text-xs text-ink-tertiary text-right">
+          <div class="mt-3 text-xs text-ink-tertiary text-right font-numeric">
             最大区域 {{ heatStats.max }} 株 · 最小区域 {{ heatStats.min }} 株 · 标准差 {{ heatStats.std.toFixed(1) }}
           </div>
         </div>
@@ -787,11 +787,11 @@ onUnmounted(() => {
           class="bg-white border border-surface-border rounded-card p-10 text-center"
         >
           <template v-if="isRunning">
-            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-brand-300 mb-3 block"></i>
+            <Icon name="spinner" :size="40" class="text-brand-300 mb-3 mx-auto animate-spin-slow" />
             <div class="text-sm text-ink-secondary">正在执行检测与计数，请稍候…</div>
           </template>
           <template v-else>
-            <i class="fa-solid fa-calculator text-3xl text-ink-tertiary opacity-40 mb-3 block"></i>
+            <Icon name="count" :size="40" class="text-ink-tertiary opacity-30 mb-3 mx-auto" />
             <div class="text-sm text-ink-secondary">尚无计数结果</div>
             <div class="text-xs text-ink-tertiary mt-1">请在左侧配置输入源与参数后，点击「执行检测与计数」</div>
           </template>
@@ -801,7 +801,7 @@ onUnmounted(() => {
         <div class="bg-white border border-surface-border rounded-card overflow-hidden">
           <div class="px-5 py-3 border-b border-surface-border flex items-center justify-between">
             <h3 class="text-sm font-semibold text-ink-primary">历史计数案例</h3>
-            <span class="text-xs text-ink-tertiary">最近 {{ countingStore.history.length }} 条记录</span>
+            <span class="text-xs text-ink-tertiary font-numeric">最近 {{ countingStore.history.length }} 条记录</span>
           </div>
           <table class="w-full text-sm">
             <thead class="bg-surface-bg text-xs text-ink-secondary">
@@ -828,22 +828,22 @@ onUnmounted(() => {
                   <div class="text-xs text-ink-tertiary mt-0.5">{{ relativeTime(h?.created_at) }}</div>
                 </td>
                 <td class="py-2.5 px-5 text-xs text-ink-secondary">{{ historyModel(h) }}</td>
-                <td class="text-right py-2.5 px-5 text-brand-700 font-semibold">{{ h?.count ?? '—' }}</td>
-                <td class="text-right py-2.5 px-5 text-ink-secondary text-xs">
+                <td class="text-right py-2.5 px-5 text-brand-700 font-bold font-numeric">{{ h?.count ?? '—' }}</td>
+                <td class="text-right py-2.5 px-5 text-ink-secondary text-xs font-numeric">
                   {{ h?.density_per_m2 != null ? h.density_per_m2 + ' 株/m²' : '—' }}
                 </td>
-                <td class="text-right py-2.5 px-5 text-ink-secondary text-xs">
+                <td class="text-right py-2.5 px-5 text-ink-secondary text-xs font-numeric">
                   {{ h?.area_m2 != null ? h.area_m2 + ' m²' : '—' }}
                 </td>
                 <td class="text-right py-2.5 px-5">
-                  <button class="text-xs text-brand-700 hover:underline" @click="viewHistory(h)">
+                  <button class="text-xs text-brand-700 hover:underline font-medium" @click="viewHistory(h)">
                     查看
                   </button>
                 </td>
               </tr>
               <tr v-if="countingStore.history.length === 0">
                 <td colspan="6" class="py-10 text-center text-sm text-ink-tertiary">
-                  <i class="fa-solid fa-folder-open text-2xl text-ink-tertiary opacity-40 mb-2 block"></i>
+                  <Icon name="folder-open" :size="28" class="text-ink-tertiary opacity-30 mb-2 mx-auto" />
                   暂无历史计数记录
                 </td>
               </tr>

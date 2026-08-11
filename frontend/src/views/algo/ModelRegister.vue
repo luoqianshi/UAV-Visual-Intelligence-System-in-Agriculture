@@ -5,11 +5,11 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import SubTabs from '@/components/layout/SubTabs.vue'
 import { useModelStore } from '@/stores/model'
 import type { RegisterModelForm } from '@/api/models'
+import Icon from '@/components/common/Icon.vue'
 
 const router = useRouter()
 const modelStore = useModelStore()
 
-// 表单状态
 const form = reactive<RegisterModelForm>({
   name: '',
   display_name: '',
@@ -41,12 +41,10 @@ function onFileSelect(e: Event) {
   const file = target.files?.[0]
   if (file) {
     form.weight_file = file
-    // 自动填充 name（从文件名推导，如 yolo12s_sugarcane.pt -> yolo12s-sugarcane）
     if (!form.name) {
       const baseName = file.name.replace(/\.pt$/i, '').replace(/_/g, '-')
       form.name = baseName
     }
-    // 自动填充 display_name
     if (!form.display_name && form.name) {
       const match = form.name.match(/(yolo)?v?(\d+)([a-z])?-?(.+)?/i)
       if (match) {
@@ -72,11 +70,18 @@ function onDrop(e: DragEvent) {
   }
 }
 
+function onDragOver(e: DragEvent) {
+  e.preventDefault()
+  dragOver.value = true
+}
+function onDragLeave() {
+  dragOver.value = false
+}
+
 function clearWeightFile() {
   form.weight_file = undefined
 }
 
-// 表单校验
 const errors = computed(() => {
   const e: Record<string, string> = {}
   if (!form.name.trim()) e.name = 'name 为必填项'
@@ -90,7 +95,6 @@ const classesArray = computed(() =>
   form.classes.split(',').map((s) => s.trim()).filter(Boolean),
 )
 
-// 注册摘要预览
 const summary = computed(() => ({
   name: form.name || '—',
   engine: form.engine,
@@ -127,31 +131,27 @@ async function onSubmit() {
 
 <template>
   <AppLayout>
-    <!-- 面包屑 -->
     <div class="flex items-center gap-1 text-xs text-ink-tertiary mb-2">
-      <router-link to="/algo/models" class="hover:text-brand-700">算法管理</router-link>
-      <i class="fa-solid fa-chevron-right text-[8px]"></i>
+      <router-link to="/algo/models" class="hover:text-brand-700 transition-colors">算法管理</router-link>
+      <Icon name="chevron-right" :size="10" />
       <span class="text-ink-primary">注册模型</span>
     </div>
-    <h1 class="text-2xl font-semibold text-ink-primary mb-1">注册新模型</h1>
-    <p class="text-sm text-ink-secondary mb-4">
+    <h1 class="text-2xl font-bold text-ink-primary tracking-tight mb-1.5">注册新模型</h1>
+    <p class="text-sm text-ink-secondary mb-5">
       将已训练好的权重上传注册到系统，模型配置将写入 config/models.yaml，权重文件自动重命名保存到 models 目录，注册后可热切换激活
     </p>
 
     <SubTabs />
 
-    <!-- 成功 / 错误提示 -->
-    <div v-if="successMsg" class="mb-4 px-4 py-3 bg-brand-50 border border-brand-300 rounded-card text-sm text-brand-700 flex items-center gap-2">
-      <i class="fa-solid fa-circle-check"></i>{{ successMsg }}
+    <div v-if="successMsg" class="mb-5 px-4 py-3 bg-brand-50 border border-brand-200 rounded-card text-sm text-brand-700 flex items-center gap-2.5">
+      <Icon name="validate" :size="16" class="flex-shrink-0" />{{ successMsg }}
     </div>
-    <div v-if="errorMsg" class="mb-4 px-4 py-3 bg-red-50 border border-red-300 rounded-card text-sm text-red-700 flex items-center gap-2">
-      <i class="fa-solid fa-circle-exclamation"></i>{{ errorMsg }}
+    <div v-if="errorMsg" class="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-card text-sm text-red-700 flex items-center gap-2.5">
+      <Icon name="warning" :size="16" class="flex-shrink-0" />{{ errorMsg }}
     </div>
 
     <div class="grid grid-cols-3 gap-5">
-      <!-- 左栏：表单 -->
       <div class="col-span-2 space-y-5">
-        <!-- 基础配置 -->
         <div class="bg-white border border-surface-border rounded-card p-6">
           <h2 class="text-base font-semibold text-ink-primary mb-1">基础配置</h2>
           <p class="text-xs text-ink-tertiary mb-5">对应 config/models.yaml 中单个模型配置字段</p>
@@ -163,7 +163,7 @@ async function onSubmit() {
                   v-model="form.name"
                   type="text"
                   placeholder="yolo12s-sugarcane"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300 transition-colors"
                 />
                 <p class="text-xs text-ink-tertiary mt-1.5">模型唯一标识，格式：{模型版本}-{类别}，如 yolo12s-sugarcane</p>
               </div>
@@ -173,7 +173,7 @@ async function onSubmit() {
                   v-model="form.display_name"
                   type="text"
                   placeholder="YOLOv12s 甘蔗幼苗"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 transition-colors"
                 />
               </div>
             </div>
@@ -182,7 +182,7 @@ async function onSubmit() {
                 <label class="block text-xs font-medium text-ink-primary mb-1.5">engine <span class="text-red-500">*</span></label>
                 <select
                   v-model="form.engine"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 transition-colors"
                 >
                   <option value="ultralytics">ultralytics</option>
                   <option value="custom">custom</option>
@@ -195,11 +195,10 @@ async function onSubmit() {
                   v-model="form.category"
                   type="text"
                   placeholder="sugarcane_seedling"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300"
+                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300 transition-colors"
                 />
               </div>
             </div>
-            <!-- 权重文件上传 -->
             <div>
               <label class="block text-xs font-medium text-ink-primary mb-1.5">权重文件 <span class="text-red-500">*</span></label>
               <input
@@ -209,39 +208,37 @@ async function onSubmit() {
                 class="hidden"
                 @change="onFileSelect"
               />
-              <!-- 已选择文件状态 -->
               <div v-if="form.weight_file" class="border border-brand-300 bg-brand-50/50 rounded-btn p-3 flex items-center gap-3">
                 <div class="w-9 h-9 bg-brand-100 rounded-btn flex items-center justify-center flex-shrink-0">
-                  <i class="fa-solid fa-file-code text-brand-700"></i>
+                  <Icon name="file-code" :size="16" class="text-brand-700" />
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-1.5">
-                    <i class="fa-regular fa-circle-check text-brand-700"></i>
+                    <Icon name="validate" :size="14" class="text-brand-700 flex-shrink-0" />
                     <span class="text-sm font-medium text-ink-primary truncate">{{ form.weight_file.name }}</span>
                   </div>
-                  <div class="text-xs text-ink-tertiary mt-0.5">
+                  <div class="text-xs text-ink-tertiary mt-0.5 font-numeric">
                     {{ formatSize(form.weight_file.size) }} · 上传后自动重命名为：<span class="font-mono">{{ form.name.replace(/-/g, '_') }}.pt</span>
                   </div>
                 </div>
                 <button
-                  class="text-ink-tertiary hover:text-red-500 flex-shrink-0 p-1"
+                  class="text-ink-tertiary hover:text-red-500 flex-shrink-0 p-1 rounded hover:bg-red-50 transition-colors"
                   title="移除文件"
                   @click="clearWeightFile"
                 >
-                  <i class="fa-solid fa-xmark"></i>
+                  <Icon name="close" :size="16" />
                 </button>
               </div>
-              <!-- 拖放区域 -->
               <div
                 v-else
-                class="dropzone !p-6"
-                :class="{ 'border-brand-400 bg-brand-50/50': dragOver }"
+                class="dropzone !p-6 transition-colors"
+                :class="{ '!border-brand-500 !bg-brand-50': dragOver }"
                 @click="weightFileInput?.click()"
-                @dragover.prevent="dragOver = true"
-                @dragleave="dragOver = false"
+                @dragover="onDragOver"
+                @dragleave="onDragLeave"
                 @drop="onDrop"
               >
-                <i class="fa-solid fa-cloud-arrow-up text-3xl text-brand-300 mb-2"></i>
+                <Icon name="upload" :size="36" class="text-brand-300 mb-2" />
                 <div class="text-sm text-ink-primary font-medium">点击选择或拖拽权重文件到此处</div>
                 <div class="text-xs text-ink-tertiary mt-1">支持 .pt 格式（Ultralytics PyTorch 权重），单文件 ≤500MB</div>
               </div>
@@ -252,14 +249,13 @@ async function onSubmit() {
                 v-model="form.classes"
                 type="text"
                 placeholder="Sugarcane Seedling"
-                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300"
+                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm font-mono focus:outline-none focus:border-brand-300 transition-colors font-numeric"
               />
               <p class="text-xs text-ink-tertiary mt-1.5">类别名称列表，多个用英文逗号分隔</p>
             </div>
           </div>
         </div>
 
-        <!-- 推理参数 -->
         <div class="bg-white border border-surface-border rounded-card p-6">
           <h2 class="text-base font-semibold text-ink-primary mb-1">推理参数</h2>
           <p class="text-xs text-ink-tertiary mb-5">模型默认推理配置，运行时可在检测工作台覆盖</p>
@@ -269,7 +265,7 @@ async function onSubmit() {
               <input
                 v-model.number="form.imgsz"
                 type="number"
-                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 transition-colors font-numeric"
               />
             </div>
             <div>
@@ -278,7 +274,7 @@ async function onSubmit() {
                 v-model.number="form.conf"
                 type="number"
                 step="0.05"
-                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 transition-colors font-numeric"
               />
             </div>
             <div>
@@ -287,7 +283,7 @@ async function onSubmit() {
                 v-model.number="form.iou"
                 type="number"
                 step="0.05"
-                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 transition-colors font-numeric"
               />
             </div>
             <div>
@@ -295,14 +291,14 @@ async function onSubmit() {
               <input
                 v-model.number="form.max_det"
                 type="number"
-                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 transition-colors font-numeric"
               />
             </div>
             <div>
               <label class="block text-xs font-medium text-ink-primary mb-1.5">device</label>
               <select
                 v-model="form.device"
-                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300 transition-colors"
               >
                 <option value="">自动（GPU 优先）</option>
                 <option value="cpu">CPU</option>
@@ -313,52 +309,51 @@ async function onSubmit() {
         </div>
       </div>
 
-      <!-- 右栏：注册摘要 -->
       <div class="space-y-5">
         <div class="bg-white border border-surface-border rounded-card p-5 sticky top-5">
-          <h3 class="text-sm font-semibold text-ink-primary mb-3">注册摘要</h3>
-          <div class="space-y-2.5 text-xs">
-            <div class="flex justify-between">
+          <h3 class="text-sm font-semibold text-ink-primary mb-4">注册摘要</h3>
+          <div class="space-y-3 text-xs">
+            <div class="flex justify-between items-center">
               <span class="text-ink-tertiary">name</span>
-              <span class="text-ink-primary font-mono">{{ summary.name }}</span>
+              <span class="text-ink-primary font-mono truncate max-w-[160px]">{{ summary.name }}</span>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between items-center">
               <span class="text-ink-tertiary">engine</span>
               <span class="text-ink-primary">{{ summary.engine }}</span>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between items-center">
               <span class="text-ink-tertiary">权重文件</span>
               <span class="text-ink-primary max-w-[140px] truncate" :title="summary.weightFile">{{ summary.weightFile }}</span>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between items-center">
               <span class="text-ink-tertiary">imgsz / conf</span>
-              <span class="text-ink-primary">{{ summary.imgszConf }}</span>
+              <span class="text-ink-primary font-numeric">{{ summary.imgszConf }}</span>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between items-center">
               <span class="text-ink-tertiary">device</span>
               <span class="text-ink-primary">{{ summary.device }}</span>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between items-center">
               <span class="text-ink-tertiary">类别数</span>
-              <span class="text-ink-primary">{{ summary.classCount }}</span>
+              <span class="text-ink-primary font-numeric">{{ summary.classCount }}</span>
             </div>
           </div>
           <div class="divider my-4"></div>
-          <div class="text-xs text-ink-tertiary mb-3">
-            <i class="fa-solid fa-circle-info text-brand-500 mr-1"></i>
-            注册后模型配置将写入 config/models.yaml，权重文件保存到 models/ 目录并自动按模型名重命名
+          <div class="text-xs text-ink-tertiary mb-4 flex items-start gap-1.5">
+            <Icon name="info" :size="13" class="text-brand-500 mt-0.5 flex-shrink-0" />
+            <span>注册后模型配置将写入 config/models.yaml，权重文件保存到 models/ 目录并自动按模型名重命名</span>
           </div>
           <div class="flex gap-2">
             <router-link
               to="/algo/models"
-              class="flex-1 px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-sm text-ink-primary text-center inline-flex items-center justify-center"
+              class="flex-1 px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-sm text-ink-primary text-center inline-flex items-center justify-center transition-colors font-medium"
             >取消</router-link>
             <button
               :disabled="submitting || Object.keys(errors).length > 0"
-              class="flex-1 px-3 py-2 bg-brand-700 hover:bg-brand-900 text-white rounded-btn text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+              class="flex-1 px-3 py-2 bg-brand-700 hover:bg-brand-800 active:bg-brand-900 text-white rounded-btn text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition-colors"
               @click="onSubmit"
             >
-              <i v-if="submitting" class="fa-solid fa-spinner fa-spin text-xs"></i>
+              <Icon v-if="submitting" name="spinner" :size="14" class="animate-spin-slow" />
               {{ submitting ? '注册中…' : '注册模型' }}
             </button>
           </div>

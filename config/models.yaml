@@ -55,3 +55,14 @@ models:
   device: null
   classes: [Sugarcane Seedling]
   max_det: 300
+- name: yolo26s-sugarcane
+  engine: ultralytics
+  weight: models/yolo26s_sugarcane.pt
+  display_name: YOLO26s 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
