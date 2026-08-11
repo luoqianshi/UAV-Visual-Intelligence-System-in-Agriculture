@@ -1,135 +1,181 @@
-"""原始架次（飞行批次）只读 Mock API。
+"""原始架次 API：架次 CRUD、图片列表分页、动态缩略图预览。
 
-提供架次列表、详情、图片清单与图片预览占位图。
 所有响应遵循统一信封：{"success": bool, "data": <data>|None, "message": str}。
 """
-import io
-import json
+from flask import Blueprint, Response, jsonify, request
 
-from flask import Blueprint, Response, jsonify, request, send_from_directory
-from werkzeug.exceptions import NotFound
-
-from config import MOCK_DIR, MOCK_IMAGES_DIR
+from core.engine import get_batch_registry
 
 batches_bp = Blueprint("batches", __name__)
 
 
-def _load_batches():
-    """读取 mock/batches.json。"""
-    with open(MOCK_DIR / "batches.json", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _placeholder_image(label, w=400, h=300):
-    """生成带文字标签的占位 JPEG 图片响应；cv2 缺失时回退极简 JPEG。"""
-    try:
-        import cv2
-        import numpy as np
-    except ImportError:
-        return Response(b"\xff\xd8\xff\xe0\x00\x10JFIF", mimetype="image/jpeg")
-    img = np.full((h, w, 3), 245, dtype=np.uint8)
-    cv2.putText(
-        img,
-        label,
-        (20, h // 2),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (47, 125, 50),
-        2,
-        cv2.LINE_AA,
-    )
-    ok, buf = cv2.imencode(".jpg", img)
-    if not ok:  # 兜底：极简 1x1 JPEG
-        return Response(b"\xff\xd8\xff\xe0\x00\x10JFIF", mimetype="image/jpeg")
-    return Response(buf.tobytes(), mimetype="image/jpeg")
+def _error(message: str, status_code: int = 400):
+    return jsonify({"success": False, "data": None, "message": message}), status_code
 
 
 @batches_bp.route("/api/batches", methods=["GET"])
 def list_batches():
-    """GET /api/batches → 架次列表，支持 ?crop_type= 与 ?status= 过滤。"""
-    batches = _load_batches()
-    crop_type = request.args.get("crop_type")
-    status = request.args.get("status")
-    if crop_type:
-        batches = [b for b in batches if b.get("crop_type") == crop_type]
-    if status:
-        batches = [b for b in batches if b.get("status") == status]
+    """GET /api/batches → 架次列表，支持过滤。"""
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    crop_type = request.args.get("crop_type") or None
+    flight_date = request.args.get("flight_date") or None
+    plot_name = request.args.get("plot_name") or None
+    try:
+        batches = br.list_batches(crop_type=crop_type, flight_date=flight_date, plot_name=plot_name)
+        summary = br.get_summary()
+    except Exception as exc:
+        return _error(f"读取架次列表失败: {exc}", 500)
     return jsonify({
         "success": True,
-        "data": {"batches": batches, "total": len(batches)},
+        "data": {"batches": batches, "total": len(batches), "summary": summary},
         "message": "获取架次列表成功",
     })
 
 
 @batches_bp.route("/api/batches", methods=["POST"])
 def create_batch():
-    """POST /api/batches → 登记新架次（V1 演示模式，不持久化）。"""
-    # 接收 JSON body 但不落盘
+    """POST /api/batches → 登记新架次。"""
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    body = request.get_json(silent=True) or {}
+    try:
+        cfg = br.create_batch(body)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:
+        return _error(f"创建架次失败: {exc}", 500)
     return jsonify({
         "success": True,
-        "data": None,
-        "message": "架次登记成功（V1 演示模式，未持久化）",
+        "data": {
+            "batch_id": cfg["batch_id"],
+            "image_count": cfg["image_count"],
+            "total_size_mb": round(cfg["total_size_bytes"] / (1024 * 1024), 1),
+        },
+        "message": "架次登记成功",
     }), 201
 
 
 @batches_bp.route("/api/batches/<batch_id>", methods=["GET"])
 def get_batch(batch_id):
     """GET /api/batches/<batch_id> → 单个架次详情。"""
-    batches = _load_batches()
-    for b in batches:
-        if b.get("id") == batch_id:
-            return jsonify({
-                "success": True,
-                "data": b,
-                "message": "获取架次详情成功",
-            })
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    try:
+        batch = br.get_batch(batch_id)
+    except KeyError:
+        return _error(f"架次不存在: {batch_id}", 404)
     return jsonify({
-        "success": False,
+        "success": True,
+        "data": batch,
+        "message": "获取架次详情成功",
+    })
+
+
+@batches_bp.route("/api/batches/<batch_id>", methods=["PUT"])
+def update_batch(batch_id):
+    """PUT /api/batches/<batch_id> → 更新架次元数据。"""
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    body = request.get_json(silent=True) or {}
+    try:
+        cfg = br.update_batch(batch_id, body)
+    except KeyError:
+        return _error(f"架次不存在: {batch_id}", 404)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    return jsonify({
+        "success": True,
+        "data": cfg,
+        "message": "架次更新成功",
+    })
+
+
+@batches_bp.route("/api/batches/<batch_id>", methods=["DELETE"])
+def delete_batch(batch_id):
+    """DELETE /api/batches/<batch_id> → 删除架次登记（不删除原始文件）。"""
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    try:
+        br.delete_batch(batch_id)
+    except KeyError:
+        return _error(f"架次不存在: {batch_id}", 404)
+    return jsonify({
+        "success": True,
         "data": None,
-        "message": f"架次不存在: {batch_id}",
-    }), 404
+        "message": "架次已删除（原始文件未删除）",
+    })
 
 
 @batches_bp.route("/api/batches/<batch_id>/images", methods=["GET"])
 def list_batch_images(batch_id):
-    """GET /api/batches/<batch_id>/images → 该架次下的图片清单（12 张示例）。"""
-    # 确认架次存在
-    batches = _load_batches()
-    found = any(b.get("id") == batch_id for b in batches)
-    if not found:
-        return jsonify({
-            "success": False,
-            "data": None,
-            "message": f"架次不存在: {batch_id}",
-        }), 404
-
-    images = []
-    for i in range(1, 13):
-        fname = f"DJI_{i:04d}.jpg"
-        images.append({
-            "file": fname,
-            "url": f"/api/batches/{batch_id}/images/{fname}/preview",
-            "width": 5472,
-            "height": 3648,
-            "size_kb": 8234,
-            "captured_at": "2026-08-05T10:30:00",
-        })
+    """GET /api/batches/<batch_id>/images → 该架次下的图片列表（分页）。"""
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    try:
+        br.get_batch(batch_id)
+    except KeyError:
+        return _error(f"架次不存在: {batch_id}", 404)
+    page = request.args.get("page", 1, type=int)
+    page_size = request.args.get("page_size", 50, type=int)
+    sort_by = request.args.get("sort_by", "filename")
+    order = request.args.get("order", "asc")
+    try:
+        result = br.list_images(batch_id, page=page, page_size=page_size, sort_by=sort_by, order=order)
+    except Exception as exc:
+        return _error(f"读取图片列表失败: {exc}", 500)
     return jsonify({
         "success": True,
-        "data": {"images": images, "total": len(images)},
-        "message": "获取架次图片列表成功",
+        "data": result,
+        "message": "获取图片列表成功",
     })
 
 
-@batches_bp.route(
-    "/api/batches/<batch_id>/images/<file>/preview", methods=["GET"]
-)
-def batch_image_preview(batch_id, file):
-    """GET /api/batches/<batch_id>/images/<file>/preview → 图片预览占位图。"""
-    # 优先读取本机已有样图
+@batches_bp.route("/api/batches/<batch_id>/images/<path:filename>/preview", methods=["GET"])
+def batch_image_preview(batch_id, filename):
+    """GET /api/batches/<batch_id>/images/<file>/preview → 图片预览（缩略图/中图/原图）。"""
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    size = request.args.get("size", "thumbnail")
+    if size not in ("thumbnail", "medium", "original"):
+        size = "thumbnail"
     try:
-        return send_from_directory(str(MOCK_IMAGES_DIR), file)
-    except (FileNotFoundError, NotFound):
-        pass
-    label = file or "preview"
-    return _placeholder_image(label)
+        img_bytes = br.get_image_preview(batch_id, filename, size=size)
+    except KeyError:
+        return _error(f"架次不存在: {batch_id}", 404)
+    except FileNotFoundError:
+        return _error(f"图片不存在: {filename}", 404)
+    except Exception as exc:
+        return _error(f"读取图片失败: {exc}", 500)
+    resp = Response(img_bytes, mimetype="image/jpeg")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+@batches_bp.route("/api/batches/scan", methods=["POST"])
+def scan_path():
+    """POST /api/batches/scan → 路径预检扫描。"""
+    br = get_batch_registry()
+    if br is None:
+        return _error("batch_registry 未初始化", 500)
+    body = request.get_json(silent=True) or {}
+    path = body.get("image_folder_path", "")
+    if not path:
+        return _error("缺少 image_folder_path 参数", 400)
+    try:
+        result = br.scan_path(path)
+    except Exception as exc:
+        return _error(f"扫描失败: {exc}", 500)
+    status = 200 if result["valid"] else 400
+    return jsonify({
+        "success": result["valid"],
+        "data": result,
+        "message": result.get("message", ""),
+    }), status

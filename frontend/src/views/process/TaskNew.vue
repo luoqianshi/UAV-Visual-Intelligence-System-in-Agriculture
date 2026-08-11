@@ -1,10 +1,10 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { useMockStore } from '@/stores/mock'
+import { batchesApi, type Batch } from '@/api/batches'
 import { ref, computed, onMounted } from 'vue'
 
 // 1:1 迁移 process/task-new.html：4 步引导式向导（类型 → 输入源 → 参数 → 确认）
-const store = useMockStore()
+const batches = ref<Batch[]>([])
 
 const steps = [
   { n: 1, label: '选择类型' },
@@ -33,7 +33,7 @@ const errorMsg = ref('')
 const submitting = ref(false)
 
 const selectedBatches = computed(() =>
-  store.batches.filter((b) => selectedBatchIds.value.includes(b.id)),
+  batches.value.filter((b) => selectedBatchIds.value.includes(b.batch_id)),
 )
 const selectedImageCount = computed(() =>
   selectedBatches.value.reduce((s, b) => s + (b.image_count || 0), 0),
@@ -56,8 +56,8 @@ function toggleBatch(bid: string) {
   else selectedBatchIds.value.push(bid)
 }
 function toggleAll() {
-  if (selectedBatchIds.value.length === store.batches.length) selectedBatchIds.value = []
-  else selectedBatchIds.value = store.batches.map((b) => b.id)
+  if (selectedBatchIds.value.length === batches.value.length) selectedBatchIds.value = []
+  else selectedBatchIds.value = batches.value.map((b) => b.batch_id)
 }
 
 function stepState(n: number): 'active' | 'done' | '' {
@@ -99,8 +99,11 @@ async function submit() {
   }
 }
 
-onMounted(() => {
-  store.fetchBatches().catch(() => {})
+onMounted(async () => {
+  try {
+    const res = await batchesApi.list()
+    batches.value = res.data.batches
+  } catch {}
 })
 </script>
 
@@ -197,7 +200,7 @@ onMounted(() => {
                 <table class="w-full text-sm">
                   <thead class="bg-surface-bg text-xs text-ink-secondary">
                     <tr>
-                      <th class="text-left py-2 px-3 font-medium w-10"><input type="checkbox" :checked="store.batches.length > 0 && selectedBatchIds.length === store.batches.length" @change="toggleAll" class="rounded" /></th>
+                      <th class="text-left py-2 px-3 font-medium w-10"><input type="checkbox" :checked="batches.length > 0 && selectedBatchIds.length === batches.length" @change="toggleAll" class="rounded" /></th>
                       <th class="text-left py-2 px-3 font-medium">架次名称</th>
                       <th class="text-left py-2 px-3 font-medium">作物 / 地块</th>
                       <th class="text-right py-2 px-3 font-medium">原图数</th>
@@ -205,18 +208,18 @@ onMounted(() => {
                     </tr>
                   </thead>
                   <tbody class="row-hover">
-                    <tr v-if="store.batches.length === 0"><td colspan="5" class="py-6 text-center text-ink-tertiary text-xs">暂无可选架次</td></tr>
+                    <tr v-if="batches.length === 0"><td colspan="5" class="py-6 text-center text-ink-tertiary text-xs">暂无可选架次</td></tr>
                     <tr
-                      v-for="b in store.batches"
-                      :key="b.id"
+                      v-for="b in batches"
+                      :key="b.batch_id"
                       class="border-t border-surface-border"
-                      :class="{ 'bg-brand-50/30': selectedBatchIds.includes(b.id) }"
+                      :class="{ 'bg-brand-50/30': selectedBatchIds.includes(b.batch_id) }"
                     >
-                      <td class="py-2 px-3"><input type="checkbox" :checked="selectedBatchIds.includes(b.id)" @change="toggleBatch(b.id)" class="rounded" /></td>
-                      <td class="py-2 px-3 text-ink-primary font-medium">{{ b.name }}</td>
-                      <td class="py-2 px-3 text-ink-secondary text-xs">{{ b.crop_type }} · {{ b.plot_id || b.location || '-' }}</td>
+                      <td class="py-2 px-3"><input type="checkbox" :checked="selectedBatchIds.includes(b.batch_id)" @change="toggleBatch(b.batch_id)" class="rounded" /></td>
+                      <td class="py-2 px-3 text-ink-primary font-medium">{{ b.batch_name }}</td>
+                      <td class="py-2 px-3 text-ink-secondary text-xs">{{ b.crop_type }} · {{ b.plot_name || '-' }}</td>
                       <td class="text-right py-2 px-3 text-ink-secondary text-xs">{{ b.image_count }}</td>
-                      <td class="text-right py-2 px-3 text-ink-secondary text-xs">{{ b.altitude_m }} m</td>
+                      <td class="text-right py-2 px-3 text-ink-secondary text-xs">{{ b.flight_altitude_m ? b.flight_altitude_m + ' m' : '-' }}</td>
                     </tr>
                   </tbody>
                 </table>

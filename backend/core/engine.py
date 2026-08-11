@@ -1,4 +1,4 @@
-"""引擎单例容器：集中持有 registry / detector / counter / task_manager。
+"""引擎单例容器：集中持有 registry / batch_registry / detector / counter / task_manager。
 
 通过 init_engines() 一次性初始化，get_*() 在各处取用。
 
@@ -8,13 +8,16 @@
 """
 import logging
 
-from config import MODELS_YAML, MODELS_DIR, LRU_CACHE_SIZE, MAX_WORKERS
+from config import (BATCHES_YAML, DATA_DIR, LRU_CACHE_SIZE, MAX_WORKERS,
+                    MODELS_DIR, MODELS_YAML)
+from core.batch_registry import BatchRegistry
 from core.registry import ModelRegistry
 from core.task_manager import TaskManager
 
 logger = logging.getLogger(__name__)
 
 registry = None
+batch_registry = None
 detector = None
 counter = None
 task_manager = None
@@ -25,24 +28,30 @@ def init_engines():
 
     - registry 从 models.yaml 加载配置（仅解析 YAML，不依赖 cv2/torch），
       始终优先初始化，确保模型管理/列表/注册可用；
+    - batch_registry 从 batches.yaml 加载架次配置并自动扫描 data/，仅依赖
+      PyYAML + Pillow，始终初始化；
     - task_manager 仅依赖标准库，同样始终初始化；
     - detector / counter 依赖 cv2/numpy/ultralytics，在独立 try/except 中
       初始化：缺失时降级（detector/counter 保持 None），仅影响检测/计数
       推理，不影响模型管理与 mock 页面。
     """
-    global registry, detector, counter, task_manager
+    global registry, batch_registry, detector, counter, task_manager
 
-    # ① 注册中心：仅依赖 PyYAML，必须成功
+    # ① 模型注册中心：仅依赖 PyYAML，必须成功
     registry = ModelRegistry(str(MODELS_YAML), str(MODELS_DIR), lru_size=LRU_CACHE_SIZE)
     registry.load_from_yaml()
 
-    # ② 任务管理器：仅依赖标准库
+    # ② 架次注册中心：仅依赖 PyYAML + Pillow，必须成功
+    batch_registry = BatchRegistry(DATA_DIR, BATCHES_YAML)
+    batch_registry.load_from_yaml()
+
+    # ③ 任务管理器：仅依赖标准库
     task_manager = TaskManager(max_workers=MAX_WORKERS)
 
-    # ③ 检测/计数引擎：依赖 cv2/numpy/ultralytics，缺失时降级
+    # ④ 检测/计数引擎：依赖 cv2/numpy/ultralytics，缺失时降级
     try:
-        from core.detector import DetectionEngine
         from core.counter import CountingEngine
+        from core.detector import DetectionEngine
         detector = DetectionEngine(registry)
         counter = CountingEngine(detector, task_manager)
     except Exception as exc:
@@ -53,6 +62,10 @@ def init_engines():
 
 def get_registry():
     return registry
+
+
+def get_batch_registry():
+    return batch_registry
 
 
 def get_detector():

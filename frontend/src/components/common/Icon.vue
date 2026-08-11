@@ -91,6 +91,7 @@ const icons: Record<string, string> = {
 
   // 检测按钮和bolt
   'cloud-arrow-up': '<path d="M12 15 V7"/><path d="M9 10 L12 7 L15 10"/><path d="M7 18 A4 4 0 0 1 7 10 A5 5 0 0 1 17 10 A4 4 0 0 1 17 18 Z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 L21 21"/>',
 }
 </script>
 

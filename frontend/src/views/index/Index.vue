@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useMockStore } from '@/stores/mock'
 import { useCountingStore } from '@/stores/counting'
 import { useModelStore } from '@/stores/model'
+import { batchesApi } from '@/api/batches'
 
 const mockStore = useMockStore()
 const countingStore = useCountingStore()
 const modelStore = useModelStore()
 
-// 端到端流程：阶段统计（基于真实 store 数据，空数据优雅降级）
-const totalImages = computed(() =>
-  mockStore.batches.reduce((s, b) => s + (b.image_count || 0), 0),
-)
+// 架次数据（真实 API）
+const batchCount = ref(0)
+const batchTotalImages = ref(0)
+const totalImages = computed(() => batchTotalImages.value)
 const processingCount = computed(
   () => mockStore.tasks.filter((t) => t.status === 'processing').length,
 )
@@ -107,7 +108,10 @@ const activities = computed<ActivityItem[]>(() => {
 
 onMounted(() => {
   Promise.all([
-    mockStore.fetchBatches(),
+    batchesApi.list().then((res) => {
+      batchCount.value = res.data.summary.total_batches
+      batchTotalImages.value = res.data.summary.total_images
+    }).catch(() => {}),
     mockStore.fetchTasks(),
     mockStore.fetchDatasets(),
     modelStore.fetchModels(),
@@ -148,7 +152,7 @@ onMounted(() => {
           <div class="text-sm font-semibold text-ink-primary">数据管理</div>
           <div class="text-xs text-ink-tertiary mt-1">按架次登记 UAV 原始图片，本机路径浏览</div>
           <div class="text-xs text-brand-700 mt-2 font-medium">
-            {{ totalImages }} 张原图 · {{ mockStore.batchTotal }} 架次
+            {{ totalImages }} 张原图 · {{ batchCount }} 架次
           </div>
         </router-link>
 
