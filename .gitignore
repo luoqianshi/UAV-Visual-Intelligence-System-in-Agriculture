@@ -38,3 +38,6 @@ Thumbs.db
 # 日志
 .backend_stderr.log
 .backend_stdout.log
+
+# 本地数据
+data/
