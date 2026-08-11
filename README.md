@@ -26,7 +26,7 @@ project_root/
 │   │   ├── engine.py           # 引擎单例容器
 │   │   └── result_store.py     # 计数结果持久化
 │   ├── mock/                   # mock 数据 JSON（batches/tasks/datasets）
-│   ├── tests/                  # 核心引擎 + API TDD 测试（63 项）
+│   ├── tests/                  # 核心引擎 + API TDD 测试（72 项）
 │   └── static/                 # Vue 构建产物（gitignore，由前端构建生成）
 ├── frontend/                   # Vue 3 前端
 │   ├── vite.config.ts          # Vite + /api 代理 + build→backend/static
@@ -38,7 +38,7 @@ project_root/
 │       ├── components/layout/  # AppLayout / Sidebar / SubTabs
 │       ├── components/algo/    # DetectionViewer / HeatmapChart / ConfidenceDistChart
 │       └── views/              # index / algo / data / process / dataset
-├── config/models.yaml          # 模型注册配置（4 个甘蔗模型）
+├── config/models.yaml          # 模型注册配置（6 个甘蔗模型）
 ├── models/                     # YOLO 权重放置目录（需手动放入）
 ├── results/                    # 计数结果输出
 ├── requirements.txt
@@ -60,14 +60,16 @@ project_root/
 
 ## 模型权重放置
 
-将 4 个甘蔗幼苗检测权重放入 `models/` 目录，文件名需与 `config/models.yaml` 中 `weight` 字段一致：
+将 6 个甘蔗幼苗检测权重放入 `models/` 目录，文件名需与 `config/models.yaml` 中 `weight` 字段一致：
 
 ```
 models/
 ├── yolov5su_sugarcane.pt
 ├── yolov8s_sugarcane.pt
 ├── yolo11s_sugarcane.pt
-└── yolo12s_sugarcane.pt
+├── yolo12s_sugarcane.pt
+├── yolo12n_sugarcane.pt
+└── yolo26s_sugarcane.pt
 ```
 
 默认激活模型为 `yolo12s-sugarcane`，可在前端「算法广场 → 算法管理」热切换。
@@ -128,8 +130,8 @@ npm run build                  # 产物输出到 backend/static/
 | 数据管理 | 🔶 mock | 架次列表/详情/登记（3 架次 840 张，只读浏览） |
 | 数据处理 | 🔶 mock | CLAHE/裁切任务列表/详情/新建（7 任务，只读浏览） |
 | 数据集管理 | 🔶 mock | 数据集列表/详情/构建（4 数据集，只读浏览） |
-| 算法广场-算法管理 | ✅ 真实 | 4 模型列表、热切换激活、动态注册、模型详情 |
-| 算法广场-单图检测 | ✅ 真实 | 上传图片 → 选模型 → 同步检测 → 结果图+检测列表 |
+| 算法广场-算法管理 | ✅ 真实 | 6 模型列表、热切换激活、动态注册、模型详情 |
+| 算法广场-作物检测 | ✅ 真实 | 上传图片 → 选模型 → 同步检测 → 结果图+检测列表 |
 | 算法广场-作物计数 | ✅ 真实 | 高分辨率原图 → 异步计数 → 总数/密度/热力图/置信度/标注图 |
 
 ## 核心引擎
@@ -142,13 +144,13 @@ npm run build                  # 产物输出到 backend/static/
 ## 技术栈
 
 - **后端**：Flask 2.2.3 · Ultralytics · PyTorch · OpenCV · Pillow · NumPy · PyYAML
-- **前端**：Vue 3 · Vite · Tailwind CSS · Pinia · Vue Router · ECharts · Axios · FontAwesome 6
+- **前端**：Vue 3 · Vite · Tailwind CSS · Pinia · Vue Router · ECharts · Axios · 自定义 SVG 图标组件
 
 ## 测试
 
 ```powershell
 cd backend
-python -m pytest -v            # 63 项测试（核心引擎 TDD + API 接线 + mock 端点）
+python -m pytest -v            # 72 项测试（核心引擎 TDD + API 接线 + mock 端点）
 ```
 
 ## API 概览
@@ -175,7 +177,7 @@ python -m pytest -v            # 63 项测试（核心引擎 TDD + API 接线 + 
 > 参数生效优先级（detector/counter 内逻辑）：请求参数 > 模型配置（models.yaml）> 引擎内置默认值。
 > ⚠️ 多处来源默认值**不一致**，下表已并列标注，请据此与你的算法工程统一对齐。
 
-### 1）模型级推理参数（config/models.yaml，4 个甘蔗模型共用）
+### 1）模型级推理参数（config/models.yaml，6 个甘蔗模型共用）
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
@@ -183,7 +185,6 @@ python -m pytest -v            # 63 项测试（核心引擎 TDD + API 接线 + 
 | conf | 0.25 | 检测置信度阈值 |
 | iou | 0.7 | NMS IoU 阈值（模型内，ultralytics 推理阶段） |
 | max_det | 300 | 单张最大检测框数 |
-| half | false | 是否 FP16 半精度 |
 | device | null（自动） | GPU 优先，无则 CPU |
 
 ### 2）单图检测（算法广场-单图检测，Detect.vue）
@@ -195,9 +196,8 @@ python -m pytest -v            # 63 项测试（核心引擎 TDD + API 接线 + 
 | imgsz | 640 | 640 | 640 | 一致 |
 | max_det | 300 | 300 | 300 | 一致 |
 | device | 空 | null | null | 自动 |
-| half | false | false | — | 单图走 engine.predict 未用 half |
 
-> 已移除单图检测前端的分块参数（overlap_ratio / nms_iou），单图无分块逻辑，与后端 detect_api 仅解析 imgsz/conf/iou/max_det/device 保持一致。
+> 已移除单图检测前端的分块参数（overlap_ratio / nms_iou）与 half 字段，单图无分块逻辑，与后端 detect_api 仅解析 imgsz/conf/iou/max_det/device 保持一致。
 
 ### 3）作物计数（算法广场-作物计数，Counting.vue / counter.py）
 
@@ -210,6 +210,10 @@ python -m pytest -v            # 63 项测试（核心引擎 TDD + API 接线 + 
 | overlap_ratio | 0.05 | 0.05 | 分块重叠比例，步长=tile_size×(1-overlap) |
 | nms_iou | 0.5 | 0.5 | **全局 NMS**（合并分块边界重复框），nms.py 默认 0.5 |
 | max_det | 300 | 300 | 已统一 |
+| global_conf | 0.5 | 0.0（关闭） | 全局二次过滤阈值（合并后按置信度过滤） |
+| batch_size | 16 | 8 | 批量分块推理 batch 大小 |
+| enhance | true | false | 是否启用 CLAHE 预处理（单块模式自动禁用） |
+| save_tiles | false | false | 是否保存分块调试数据（子块原图+标注+tiles_meta.json） |
 | ground_resolution | 0.85 | 0.85 | 地面分辨率 cm/px，用于面积/密度换算 |
 | grid_n | 8 | 8 | 热力图网格 n×n |
 
@@ -235,8 +239,10 @@ python -m pytest -v            # 63 项测试（核心引擎 TDD + API 接线 + 
 2. ~~**iou**~~：✅ 已按 models.yaml=0.7 统一（前端表单 + detector 内置默认均已修正）。
 3. ~~**max_det**~~：✅ 计数前端已从 500 对齐为配置 300。
 4. ~~**单图检测分块**~~：✅ 已从前端移除 overlap_ratio / nms_iou（单图无分块逻辑，后端也未接入）。
-
-> 剩余可核对项：单图检测的 half 前端虽可配置但后端未走 engine.predict 的 half 参数（仅 imgsz/conf/iou/max_det/device 生效），若需启用 FP16 需在 detector.py 透传。
+5. ~~**half**~~：✅ 已从前端与 models.yaml 移除 half 字段（FP16 未启用，detector.py 仅透传 imgsz/conf/iou/max_det/device）。
+6. 🔶 **计数增强开关（enhance）**：前端表单默认 `true`（开启 CLAHE），引擎内置默认 `false`（关闭，训练未用 CLAHE 致分布偏移）。请与算法工程确认统一方向。
+7. 🔶 **计数 batch_size**：前端默认 `16`，引擎内置默认 `8`，请统一。
+8. 🔶 **计数 global_conf**：前端默认 `0.5`，引擎内置默认 `0.0`（关闭全局二次过滤），请统一。
 
 ## 后续阶段
 
