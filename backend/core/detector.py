@@ -178,13 +178,14 @@ class DetectionEngine:
     def _draw(self, image, detections):
         """在图像上绘制检测框与置信度，返回 base64 JPEG 字符串。
 
-        image 可为文件路径（cv2.imread 得 BGR）或 RGB 数组；统一到 BGR 后再
-        绘制与编码，颜色元组按 BGR 顺序书写，避免 R/B 对调致框色偏蓝。
+        image 可为文件路径（cv2.imread 得 BGR）或 BGR 数组（调用方约定，
+        与 ultralytics ndarray 期望一致）；两者均已是 BGR，无需转换，
+        颜色元组按 BGR 顺序书写。
         """
         if isinstance(image, str):
             img = cv2.imread(image)  # BGR
         elif image.ndim == 3:
-            img = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # RGB → BGR
+            img = image.copy()  # 已是 BGR（调用方约定）
         else:
             img = image.copy()
         for det in detections:

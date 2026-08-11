@@ -12,6 +12,8 @@ export interface CountingParams {
   iou?: number
   max_det?: number
   imgsz?: number
+  save_tiles?: boolean
+  enhance?: boolean
 }
 
 export interface TileResult {

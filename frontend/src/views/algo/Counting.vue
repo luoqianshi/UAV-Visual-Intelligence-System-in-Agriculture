@@ -84,7 +84,7 @@ const modelName = ref('')
 const conf = ref(0.25)
 const iou = ref(0.7)
 const max_det = ref(300)
-const global_conf = ref(0.5)
+const global_conf = ref(0.0)
 const tile_size = ref(640)
 const overlap_ratio = ref(0.05)
 const nms_iou = ref(0.5)
@@ -92,6 +92,7 @@ const batch_size = ref(8)
 const ground_resolution = ref(0.85)
 const grid_n = ref(8)
 const saveTiles = ref(false)
+const enhance = ref(false)
 
 const isRunning = computed(
   () => countingStore.status === 'pending' || countingStore.status === 'processing',
@@ -221,6 +222,7 @@ async function onSubmit() {
       max_det: max_det.value,
       global_conf: global_conf.value,
       save_tiles: saveTiles.value,
+      enhance: enhance.value,
     }
     if (selectedFile.value) {
       payload.image = selectedFile.value
@@ -505,22 +507,26 @@ onUnmounted(() => {
                   class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
                 />
               </div>
-              <div>
-                <label class="block text-xs font-medium text-ink-primary mb-1.5">global_conf（全局二次过滤）</label>
-                <input
-                  v-model.number="global_conf"
-                  type="number"
-                  step="0.05"
-                  class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
-                />
-              </div>
             </div>
 
             <!-- 分块检测 -->
             <div class="pt-3 border-t border-surface-border">
               <div class="text-xs font-medium text-ink-primary mb-2.5 flex items-center gap-1.5">
-                <i class="fa-solid fa-table-cells text-ink-tertiary"></i> CLAHE 分块检测
+                <i class="fa-solid fa-table-cells text-ink-tertiary"></i> 分块检测
               </div>
+              <label class="flex items-start gap-2.5 cursor-pointer mb-3">
+                <input
+                  v-model="enhance"
+                  type="checkbox"
+                  class="mt-0.5 w-4 h-4 accent-brand-700 cursor-pointer"
+                />
+                <div class="flex-1">
+                  <div class="text-xs font-medium text-ink-primary">CLAHE 预处理增强</div>
+                  <div class="text-xs text-ink-tertiary mt-0.5">
+                    对原图做 CLAHE 对比度增强后再分块检测。默认关闭——模型训练未用 CLAHE，开启可能致分布偏移、压低置信度；仅在光照严重不均时启用
+                  </div>
+                </div>
+              </label>
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-xs font-medium text-ink-secondary mb-1.5">tile_size</label>
@@ -534,6 +540,15 @@ onUnmounted(() => {
                   <label class="block text-xs font-medium text-ink-secondary mb-1.5">overlap_ratio</label>
                   <input
                     v-model.number="overlap_ratio"
+                    type="number"
+                    step="0.05"
+                    class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-ink-secondary mb-1.5">global_conf（全局二次过滤）</label>
+                  <input
+                    v-model.number="global_conf"
                     type="number"
                     step="0.05"
                     class="w-full px-3 py-2 bg-white border border-surface-border rounded-btn text-sm focus:outline-none focus:border-brand-300"

@@ -41,6 +41,7 @@ _COUNTING_PARAM_TYPES = {
     "max_det": int,
     "imgsz": int,
     "save_tiles": bool,
+    "enhance": bool,
 }
 
 

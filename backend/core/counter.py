@@ -32,24 +32,42 @@ class CountingEngine:
         tile_size = params.get("tile_size", 640)
         overlap_ratio = params.get("overlap_ratio", 0.05)
         nms_iou = params.get("nms_iou", 0.5)
-        global_conf = params.get("global_conf", 0.5)  # 合并后全局二次过滤，<=0 关闭
+        global_conf = params.get("global_conf", 0.0)  # 合并后全局二次过滤，<=0 关闭（默认关闭，与检测模式阈值对齐）
         batch_size = max(int(params.get("batch_size", 8)), 1)
         ground_res = params.get("ground_resolution", 0.85)  # cm/px
         grid_n = params.get("grid_n", 8)
         save_tiles = params.get("save_tiles", False) and result_dir is not None
+        enhance = params.get("enhance", False)  # CLAHE 预处理，默认关闭（训练未用 CLAHE，开启会致分布偏移）
 
-        # ① 加载原图
+        # ① 加载原图（保持 BGR，与 cv2.imread / ultralytics ndarray 期望一致，
+        #    避免颜色通道反转导致检测失准）
         if isinstance(image, str):
             original = cv2.imread(image)
-            original = cv2.cvtColor(original, cv2.COLOR_BGR2RGB)
         else:
             original = image
         h, w = original.shape[:2]
 
-        # ② CLAHE
+        # 单块短路：原图 ≤ tile_size 时仅 1 块、无重叠冗余，
+        # 强制关闭 CLAHE / 全局 conf 过滤 / 全局 NMS，避免无意义计算
+        # （640×640 输入配默认 tile_size=640 即命中此分支）
+        is_single_tile = (w <= tile_size and h <= tile_size)
+        if is_single_tile:
+            if enhance:
+                logger.info(
+                    "原图 %dx%d ≤ tile_size=%d，单块模式：自动禁用 CLAHE/全局conf/全局NMS",
+                    w, h, tile_size,
+                )
+            enhance = False
+            global_conf = 0.0
+            skip_global_nms = True
+        else:
+            skip_global_nms = False
+
+        # ② CLAHE（可选，默认关闭）
+        # 顺序对齐原始 crop.py：先对高分辨率原图整体做 CLAHE，再对增强后的图分块
         if on_progress:
             on_progress("enhancing", 0, 1)
-        enhanced = clahe.enhance(original)
+        enhanced = clahe.enhance(original) if enhance else original
 
         # ③ 分块
         tiles = tiling.slide_window(enhanced, tile_size, overlap_ratio)
@@ -92,8 +110,8 @@ class CountingEngine:
                         tile_file = f"{tile_stem}.jpg"
                         annotated_file = f"{tile_stem}_annotated.jpg"
 
-                        # 保存子块原图（RGB→BGR）
-                        tile_bgr = cv2.cvtColor(tile_img, cv2.COLOR_RGB2BGR)
+                        # 保存子块原图（已是 BGR，无需转换）
+                        tile_bgr = tile_img
                         cv2.imwrite(str(tiles_dir / tile_file), tile_bgr)
 
                         # 保存子块检测框可视化（使用局部坐标，映射前）
@@ -148,14 +166,20 @@ class CountingEngine:
             except Exception as e:
                 logger.warning("tiles_meta.json 写入失败：%s", e)
 
-        # ⑤ 全局合并（NMS）+ 全局 conf 二次过滤 + 编号
-        merged = nms.global_nms(all_dets, nms_iou)
+        # ⑤ 全局 conf 二次过滤 → 全局 NMS 去重 → 编号
+        # 顺序：先按置信度过滤低分检测，再对存活框做 NMS 去重
+        # （单块模式 skip_global_nms=True 时跳过 NMS）
         if global_conf > 0:
-            before = len(merged)
-            merged = [d for d in merged if d["confidence"] >= global_conf]
-            filtered_count = before - len(merged)
+            before = len(all_dets)
+            filtered = [d for d in all_dets if d["confidence"] >= global_conf]
+            filtered_count = before - len(filtered)
         else:
+            filtered = all_dets
             filtered_count = 0
+        if skip_global_nms:
+            merged = list(filtered)
+        else:
+            merged = nms.global_nms(filtered, nms_iou)
         for idx, det in enumerate(merged, 1):
             det["id"] = idx
 
@@ -234,10 +258,10 @@ class CountingEngine:
     def _draw(self, image, dets):
         """在原图上绘制检测框与编号，返回 base64 JPEG 字符串。
 
-        image 为 RGB 顺序（count() 中已 BGR→RGB）；cv2 绘制与 imencode 均以
-        BGR 为准，故先转 BGR，颜色元组按 BGR 顺序书写，否则 R/B 对调致偏蓝。
+        image 为 BGR 顺序（count() 中已保持 cv2.imread 的 BGR）；cv2 绘制与
+        imencode 均以 BGR 为准，无需转换，颜色元组按 BGR 顺序书写。
         """
-        img = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # RGB → BGR
+        img = image.copy()  # 已是 BGR
         for d in dets:
             x1, y1, x2, y2 = [int(v) for v in d["bbox"]]
             cv2.rectangle(img, (x1, y1), (x2, y2), (53, 57, 229), 2)  # BGR: 红

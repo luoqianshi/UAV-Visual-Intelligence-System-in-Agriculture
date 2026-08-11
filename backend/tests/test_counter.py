@@ -94,11 +94,12 @@ def test_count_full_pipeline(mock_enhance):
             **TWO_TILE_PARAMS,
             "ground_resolution": 0.85,
             "grid_n": 8,
+            "enhance": True,  # 显式启用 CLAHE 以测试完整管线（默认已改为关闭）
         },
         on_progress=on_progress,
     )
 
-    # 1. count（默认 global_conf=0.5，0.9/0.8 均通过二次过滤）
+    # 1. count（默认 global_conf=0.0 关闭二次过滤，0.9/0.8 均保留）
     assert result["count"] == 2
     assert result["filtered_count"] == 0
 
