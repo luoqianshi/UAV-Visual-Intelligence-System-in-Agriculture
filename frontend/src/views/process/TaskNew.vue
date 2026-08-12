@@ -26,8 +26,15 @@ const inputMode = ref<'batch' | 'data' | 'dir'>('batch')
 const customDir = ref('')
 const selectedProcessedIds = ref<string[]>([])
 
+function generateDefaultName(type: 'clahe' | 'crop'): string {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  return type === 'clahe' ? `CLAHE增强_${ts}` : `滑窗裁切_${ts}`
+}
+
 const form = ref({
-  name: 'CLAHE 增强',
+  name: generateDefaultName('clahe'),
   clip_limit: 2.0,
   grid: '8 × 8',
   tile_size: 640,
@@ -55,7 +62,7 @@ const selectedProcessedImageCount = computed(() =>
 
 function selectType(t: 'clahe' | 'crop') {
   selectedType.value = t
-  // 重置时只重置 output_path，name 由用户输入或由 selectType 切换时调整
+  form.value.name = generateDefaultName(t)
   form.value.output_path = 'output/'
 }
 
@@ -180,8 +187,8 @@ async function submit() {
   }
 }
 
-function typeBadge(t: string) {
-  return t === 'clahe' ? 'tag-blue' : 'tag-amber'
+function typeBadge(_t: string) {
+  return ''
 }
 function typeLabel(t: string) {
   return t === 'clahe' ? 'CLAHE 增强' : '滑窗裁切'

@@ -148,6 +148,10 @@ class ProcessingEngine:
         """输入源归一化为 [(sub_dir_name, [image_paths])]。
 
         sub_dir_name 用源目录名；若同名则追加 _2、_3 避免冲突。
+        支持：
+        1. 原始架次目录：图片直接在根目录
+        2. 加工产物目录：包含 index.json，图片在 sub_dirs 子目录中
+        3. 兜底递归：根目录无图但有子目录时，递归扫描子目录
         """
         sources = []
         used_names = set()
@@ -158,18 +162,74 @@ class ProcessingEngine:
             if not path.is_dir():
                 logger.warning("跳过不存在的输入路径: %s", path)
                 continue
+
+            # 检查是否为加工产物目录（包含 index.json）
+            index_path = path / "index.json"
+            if index_path.exists():
+                try:
+                    import json
+                    with open(index_path, "r", encoding="utf-8") as f:
+                        index_data = json.load(f)
+                    sub_dirs = index_data.get("sub_dirs", [])
+                    for sd in sub_dirs:
+                        sd_name = sd.get("sub_dir", "")
+                        if not sd_name:
+                            continue
+                        sd_path = path / sd_name
+                        if not sd_path.is_dir():
+                            continue
+                        img_paths = sorted([
+                            f for f in sd_path.iterdir()
+                            if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
+                        ])
+                        if not img_paths:
+                            continue
+                        # 子目录命名：task_id/sub_dir 避免冲突
+                        base_name = f"{path.name}_{sd_name}"
+                        sub_name = base_name
+                        counter = 2
+                        while sub_name in used_names:
+                            sub_name = f"{base_name}_{counter}"
+                            counter += 1
+                        used_names.add(sub_name)
+                        sources.append((sub_name, img_paths))
+                    if sub_dirs:
+                        continue  # 已通过 index.json 处理
+                except Exception as e:
+                    logger.warning("读取 index.json 失败，尝试普通扫描: %s", e)
+
+            # 普通目录：直接扫描根目录
             img_paths = sorted([
                 f for f in path.iterdir()
                 if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
             ])
-            if not img_paths:
+            if img_paths:
+                base_name = path.name
+                sub_name = base_name
+                counter = 2
+                while sub_name in used_names:
+                    sub_name = f"{base_name}_{counter}"
+                    counter += 1
+                used_names.add(sub_name)
+                sources.append((sub_name, img_paths))
                 continue
-            base_name = path.name
-            sub_name = base_name
-            counter = 2
-            while sub_name in used_names:
-                sub_name = f"{base_name}_{counter}"
-                counter += 1
-            used_names.add(sub_name)
-            sources.append((sub_name, img_paths))
+
+            # 兜底：根目录无图，递归扫描一级子目录
+            for sub_entry in sorted(path.iterdir()):
+                if not sub_entry.is_dir():
+                    continue
+                sub_img_paths = sorted([
+                    f for f in sub_entry.iterdir()
+                    if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
+                ])
+                if not sub_img_paths:
+                    continue
+                base_name = f"{path.name}_{sub_entry.name}"
+                sub_name = base_name
+                counter = 2
+                while sub_name in used_names:
+                    sub_name = f"{base_name}_{counter}"
+                    counter += 1
+                used_names.add(sub_name)
+                sources.append((sub_name, sub_img_paths))
         return sources

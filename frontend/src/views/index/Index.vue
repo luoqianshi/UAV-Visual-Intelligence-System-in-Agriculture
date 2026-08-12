@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Icon from '@/components/common/Icon.vue'
 import { useMockStore } from '@/stores/mock'
 import { useProcessingStore } from '@/stores/processing'
 import { useCountingStore } from '@/stores/counting'
@@ -147,7 +148,7 @@ onMounted(() => {
         >
           <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700">
-              <i class="fa-solid fa-folder-open text-sm"></i>
+              <Icon name="dataset" :size="16" />
             </div>
             <div class="text-xs text-ink-tertiary">阶段 1</div>
           </div>
@@ -165,7 +166,7 @@ onMounted(() => {
         >
           <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700">
-              <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+              <Icon name="augment" :size="16" />
             </div>
             <div class="text-xs text-ink-tertiary">阶段 2</div>
           </div>
@@ -183,7 +184,7 @@ onMounted(() => {
         >
           <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700">
-              <i class="fa-solid fa-database text-sm"></i>
+              <Icon name="database" :size="16" />
             </div>
             <div class="text-xs text-ink-tertiary">阶段 3</div>
           </div>
@@ -201,7 +202,7 @@ onMounted(() => {
         >
           <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700">
-              <i class="fa-solid fa-microchip text-sm"></i>
+              <Icon name="chip" :size="16" />
             </div>
             <div class="text-xs text-ink-tertiary">阶段 4</div>
           </div>
@@ -215,7 +216,7 @@ onMounted(() => {
       <div
         class="mt-4 pt-3 border-t border-surface-border text-xs text-ink-tertiary flex items-center gap-1.5"
       >
-        <i class="fa-solid fa-circle-info"></i>
+        <Icon name="info" :size="13" />
         阶段 2 产出的处理结果交付外部标注工具标注后，作为阶段 3 的标注输入；阶段 4 直接对图片执行检测推理。
       </div>
     </div>
@@ -236,7 +237,7 @@ onMounted(() => {
               <div
                 class="w-10 h-10 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700 flex-shrink-0"
               >
-                <i class="fa-solid fa-folder-plus text-base"></i>
+                <Icon name="dataset" :size="18" />
               </div>
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-ink-primary">登记新架次</div>
@@ -250,7 +251,7 @@ onMounted(() => {
               <div
                 class="w-10 h-10 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700 flex-shrink-0"
               >
-                <i class="fa-solid fa-wand-magic-sparkles text-base"></i>
+                <Icon name="augment" :size="18" />
               </div>
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-ink-primary">新建处理任务</div>
@@ -264,7 +265,7 @@ onMounted(() => {
               <div
                 class="w-10 h-10 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700 flex-shrink-0"
               >
-                <i class="fa-solid fa-database text-base"></i>
+                <Icon name="database" :size="18" />
               </div>
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-ink-primary">构建数据集</div>
@@ -278,7 +279,7 @@ onMounted(() => {
               <div
                 class="w-10 h-10 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700 flex-shrink-0"
               >
-                <i class="fa-solid fa-bolt text-base"></i>
+                <Icon name="bolt" :size="18" />
               </div>
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-ink-primary">检测工作台</div>
@@ -292,7 +293,7 @@ onMounted(() => {
               <div
                 class="w-10 h-10 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700 flex-shrink-0"
               >
-                <i class="fa-solid fa-calculator text-base"></i>
+                <Icon name="count" :size="18" />
               </div>
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-ink-primary">计数工作台</div>
@@ -318,8 +319,8 @@ onMounted(() => {
               <span class="text-ink-tertiary">{{ item.time }}</span>
             </router-link>
           </div>
-          <div v-else class="text-xs text-ink-tertiary text-center py-8">
-            <i class="fa-regular fa-clock mr-1.5"></i>暂无最近活动
+          <div v-else class="text-xs text-ink-tertiary text-center py-8 flex items-center justify-center gap-1.5">
+            <Icon name="bell" :size="14" /> 暂无最近活动
           </div>
         </div>
       </div>

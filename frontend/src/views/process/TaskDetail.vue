@@ -46,8 +46,8 @@ function statusBadge(status: string): { cls: string; label: string } {
 function typeLabel(type: string) {
   return type === 'clahe' ? 'CLAHE 增强' : '滑窗裁切'
 }
-function typeTag(type: string) {
-  return type === 'clahe' ? 'tag-blue' : 'tag-amber'
+function typeTag(_type: string) {
+  return ''
 }
 
 const successRate = computed(() => {
@@ -194,14 +194,9 @@ onUnmounted(stopPolling)
           </div>
           <p class="text-sm text-ink-secondary mt-1">{{ inputLabel }} · 开始于 {{ task.created_at }}{{ task.completed_at ? ' · 完成于 ' + task.completed_at : '' }}</p>
         </div>
-        <div class="flex gap-2">
-          <button class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-sm text-ink-primary inline-flex items-center gap-2">
-            <Icon name="export" :size="14" /> 导出结果
-          </button>
-          <button class="px-4 py-2 bg-brand-700 hover:bg-brand-900 text-white rounded-btn text-sm font-medium inline-flex items-center gap-2">
-            <Icon name="spinner" :size="14" /> 重新运行
-          </button>
-        </div>
+        <router-link to="/process/tasks" class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-sm text-ink-primary inline-flex items-center gap-2">
+          <Icon name="arrow-left" :size="14" /> 返回列表
+        </router-link>
       </div>
 
       <!-- 失败错误条 -->

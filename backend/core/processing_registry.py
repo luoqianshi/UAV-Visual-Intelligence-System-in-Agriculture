@@ -244,16 +244,54 @@ class ProcessingRegistry:
         return newly_added
 
     def _count_input_images(self, input_paths):
-        """统计输入源图片总数。"""
+        """统计输入源图片总数。支持：原始架次目录、加工产物目录（含index.json）、递归扫描。"""
         count = 0
+        import json as _json
         for p in input_paths:
             path = self._resolve_path(p)
             if not path.is_dir():
                 continue
-            count += sum(
+
+            # 检查是否为加工产物目录（包含 index.json）
+            index_path = path / "index.json"
+            if index_path.exists():
+                try:
+                    with open(index_path, "r", encoding="utf-8") as f:
+                        index_data = _json.load(f)
+                    sub_dirs = index_data.get("sub_dirs", [])
+                    if sub_dirs:
+                        for sd in sub_dirs:
+                            sd_name = sd.get("sub_dir", "")
+                            if not sd_name:
+                                continue
+                            sd_path = path / sd_name
+                            if not sd_path.is_dir():
+                                continue
+                            count += sum(
+                                1 for f in sd_path.iterdir()
+                                if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
+                            )
+                        continue  # 已通过 index.json 处理
+                except Exception:
+                    pass
+
+            # 普通目录：直接扫描根目录
+            root_count = sum(
                 1 for f in path.iterdir()
                 if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
             )
+            if root_count > 0:
+                count += root_count
+                continue
+
+            # 兜底：根目录无图，递归扫描一级子目录
+            for sub_entry in path.iterdir():
+                if not sub_entry.is_dir():
+                    continue
+                count += sum(
+                    1 for f in sub_entry.iterdir()
+                    if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
+                )
         return count
 
     def _resolve_path(self, path_str):

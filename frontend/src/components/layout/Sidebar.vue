@@ -106,16 +106,16 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
 
 <template>
   <aside
-    class="h-screen bg-white border-r border-surface-border flex flex-col sticky top-0 flex-shrink-0 sidebar"
+    class="h-screen bg-white border-r border-surface-border flex flex-col sticky top-0 flex-shrink-0 sidebar overflow-hidden"
     :class="{ 'sidebar--collapsed': collapsed }"
     :style="{ width: currentWidth + 'px' }"
   >
-    <!-- 顶部 Logo / 折叠按钮 -->
+    <!-- 顶部 Logo + 折叠按钮 -->
     <div
-      class="px-5 py-4 border-b border-surface-border flex items-center"
-      :class="{ 'justify-center px-0': collapsed }"
+      class="px-4 py-3.5 border-b border-surface-border flex items-center gap-2"
+      :class="{ 'justify-center px-2': collapsed }"
     >
-      <div v-if="!collapsed" class="flex items-center gap-2.5 min-w-0">
+      <div v-if="!collapsed" class="flex items-center gap-2.5 min-w-0 flex-1">
         <img src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8 flex-shrink-0" />
         <div class="min-w-0">
           <div class="font-semibold text-ink-primary text-base tracking-tight truncate">田间智瞰</div>
@@ -123,10 +123,17 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
         </div>
       </div>
       <img v-else src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8 flex-shrink-0" />
+      <button
+        @click="toggleCollapsed"
+        class="flex-shrink-0 p-1.5 rounded-btn text-ink-tertiary hover:text-ink-primary hover:bg-surface-hover transition-colors"
+        :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
+      >
+        <Icon :name="collapsed ? 'chevron-right' : 'chevron-left'" :size="16" />
+      </button>
     </div>
 
     <!-- 导航 -->
-    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+    <nav class="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden">
       <router-link
         v-for="item in navItems"
         :key="item.section"
@@ -140,8 +147,8 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
       </router-link>
     </nav>
 
-    <!-- 底部：折叠按钮 + 用户区 -->
-    <div class="px-3 py-3 border-t border-surface-border">
+    <!-- 底部：用户区 -->
+    <div class="px-3 py-3 border-t border-surface-border flex-shrink-0">
       <div
         class="flex items-center gap-2.5 px-2 py-2 rounded-btn hover:bg-surface-hover cursor-pointer transition-colors"
         :class="{ 'justify-center px-0': collapsed }"
@@ -156,22 +163,7 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
           <div class="text-sm text-ink-primary truncate font-medium">研究员</div>
           <div class="text-xs text-ink-tertiary truncate">甘蔗组</div>
         </div>
-        <button
-          v-if="!collapsed"
-          class="text-ink-tertiary hover:text-ink-primary flex-shrink-0 p-1 rounded hover:bg-surface-bg transition-colors"
-          title="设置"
-        >
-          <Icon name="gear" :size="16" />
-        </button>
       </div>
-      <button
-        @click="toggleCollapsed"
-        class="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-btn text-xs text-ink-tertiary hover:bg-surface-hover hover:text-ink-primary transition-colors"
-        :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
-      >
-        <Icon :name="collapsed ? 'chevron-right' : 'chevron-left'" :size="14" />
-        <span v-if="!collapsed">收起</span>
-      </button>
     </div>
 
     <!-- 拖拽手柄：右侧边缘 -->

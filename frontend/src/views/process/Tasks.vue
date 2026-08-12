@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Icon from '@/components/common/Icon.vue'
 import { useProcessingStore } from '@/stores/processing'
 import { ref, computed, onMounted } from 'vue'
 import type { ProcessingTask } from '@/api/processing'
 
-// 1:1 迁移 process/tasks.html：按方法分组（CLAHE 增强 / 滑窗裁切）的任务表格
+// 按方法分组（CLAHE 增强 / 滑窗裁切）的任务表格
 const store = useProcessingStore()
 const filterType = ref('') // '' | 'clahe' | 'crop'
 const filterStatus = ref('') // '' | 'processing' | 'completed' | 'failed'
 const errorMsg = ref('')
 
 const groups = [
-  { type: 'clahe' as const, icon: 'fa-sun', iconBg: 'bg-brand-50', iconColor: 'text-brand-700', title: 'CLAHE 增强', desc: '对比度受限的自适应直方图均衡化 · clipLimit 默认 2.0' },
-  { type: 'crop' as const, icon: 'fa-table-cells', iconBg: 'bg-blue-50', iconColor: 'text-blue-600', title: '滑窗裁切', desc: '按固定尺寸滑窗裁切原图 · 默认 tile=640, overlap=0.1' },
+  { type: 'clahe' as const, icon: 'sparkle', title: 'CLAHE 增强', desc: '对比度受限的自适应直方图均衡化 · clipLimit 默认 2.0' },
+  { type: 'crop' as const, icon: 'grid', title: '滑窗裁切', desc: '按固定尺寸滑窗裁切原图 · 默认 tile=640, overlap=0.05' },
 ]
 
 function statusBadge(status: string): { cls: string; label: string } {
@@ -22,8 +23,9 @@ function statusBadge(status: string): { cls: string; label: string } {
   return { cls: 'badge-pending', label: status || '待处理' }
 }
 
-function typeTag(type: string) {
-  return type === 'clahe' ? 'tag-blue' : 'tag-amber'
+function typeTag(_type: string) {
+  // 统一使用克制的中性标签配色（默认 .tag 样式）
+  return ''
 }
 function typeLabel(type: string) {
   return type === 'clahe' ? 'CLAHE' : '裁切'
@@ -72,7 +74,7 @@ onMounted(applyFilters)
         to="/process/task-new"
         class="px-4 py-2 bg-brand-700 hover:bg-brand-900 text-white rounded-btn text-sm font-medium inline-flex items-center gap-2"
       >
-        <i class="fa-solid fa-plus text-xs"></i> 新建任务
+        <Icon name="plus" :size="14" /> 新建任务
       </router-link>
     </div>
 
@@ -96,17 +98,17 @@ onMounted(applyFilters)
 
     <!-- 加载中 -->
     <div v-if="store.loading" class="bg-white border border-surface-border rounded-card py-16 text-center text-ink-tertiary">
-      <i class="fa-solid fa-circle-notch fa-spin text-xl"></i>
+      <Icon name="spinner" :size="24" :spin="true" class="inline-block" />
       <div class="mt-2 text-sm">加载中…</div>
     </div>
     <!-- 错误 -->
     <div v-else-if="errorMsg" class="bg-white border border-surface-border rounded-card py-16 text-center">
-      <div class="text-red-600 mb-2"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>{{ errorMsg }}</div>
+      <div class="text-red-600 mb-2 flex items-center justify-center gap-1.5"><Icon name="warning" :size="16" />{{ errorMsg }}</div>
       <button @click="applyFilters" class="text-brand-700 hover:underline text-xs">重试</button>
     </div>
     <!-- 空 -->
     <div v-else-if="store.tasks.length === 0" class="bg-white border border-surface-border rounded-card py-16 text-center text-ink-tertiary">
-      <i class="fa-regular fa-folder-open text-2xl mb-2 block"></i>
+      <Icon name="folder-open" :size="32" class="mx-auto mb-2 opacity-40" />
       <div class="text-sm">暂无处理任务</div>
     </div>
 
@@ -119,8 +121,8 @@ onMounted(applyFilters)
       >
         <div class="px-5 py-4 border-b border-surface-border flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-btn flex items-center justify-center" :class="[g.iconBg, g.iconColor]">
-              <i class="fa-solid" :class="g.icon"></i>
+            <div class="w-9 h-9 rounded-btn flex items-center justify-center bg-brand-50 text-brand-700">
+              <Icon :name="g.icon" :size="18" />
             </div>
             <div>
               <h2 class="text-base font-semibold text-ink-primary">{{ g.title }}</h2>
@@ -130,7 +132,7 @@ onMounted(applyFilters)
           <div class="flex items-center gap-6 text-xs">
             <div class="text-center"><div class="text-lg font-semibold text-ink-primary">{{ groupStats(g.type).total }}</div><div class="text-ink-tertiary">执行次数</div></div>
             <div class="text-center"><div class="text-lg font-semibold text-brand-700">{{ groupStats(g.type).completed }}</div><div class="text-ink-tertiary">已完成</div></div>
-            <div class="text-center"><div class="text-lg font-semibold text-amber-600">{{ groupStats(g.type).processing }}</div><div class="text-ink-tertiary">进行中</div></div>
+            <div class="text-center"><div class="text-lg font-semibold text-ink-tertiary">{{ groupStats(g.type).processing }}</div><div class="text-ink-tertiary">进行中</div></div>
           </div>
         </div>
         <table class="w-full text-sm">
