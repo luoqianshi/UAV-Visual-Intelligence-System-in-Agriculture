@@ -21,6 +21,9 @@ batch_registry = None
 detector = None
 counter = None
 task_manager = None
+processing_engine = None
+processing_registry = None
+processing_task_manager = None
 
 
 def init_engines():
@@ -59,6 +62,18 @@ def init_engines():
             "检测/计数引擎初始化失败（推理功能不可用，模型管理正常）：%s", exc
         )
 
+    # ⑤ 处理引擎：依赖 cv2/numpy，缺失时降级
+    global processing_engine, processing_registry, processing_task_manager
+    try:
+        from core.processing_engine import ProcessingEngine
+        from core.processing_registry import ProcessingRegistry
+        processing_engine = ProcessingEngine()
+        processing_registry = ProcessingRegistry()
+        processing_registry.load_from_yaml()
+        processing_task_manager = TaskManager(max_workers=1)
+    except Exception as exc:
+        logger.warning("处理引擎初始化失败（数据处理功能不可用）：%s", exc)
+
 
 def get_registry():
     return registry
@@ -78,3 +93,15 @@ def get_counter():
 
 def get_task_manager():
     return task_manager
+
+
+def get_processing_engine():
+    return processing_engine
+
+
+def get_processing_registry():
+    return processing_registry
+
+
+def get_processing_task_manager():
+    return processing_task_manager
