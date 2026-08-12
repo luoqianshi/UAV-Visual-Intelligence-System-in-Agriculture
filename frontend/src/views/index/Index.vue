@@ -2,11 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useMockStore } from '@/stores/mock'
+import { useProcessingStore } from '@/stores/processing'
 import { useCountingStore } from '@/stores/counting'
 import { useModelStore } from '@/stores/model'
 import { batchesApi } from '@/api/batches'
 
 const mockStore = useMockStore()
+const processingStore = useProcessingStore()
 const countingStore = useCountingStore()
 const modelStore = useModelStore()
 
@@ -15,7 +17,7 @@ const batchCount = ref(0)
 const batchTotalImages = ref(0)
 const totalImages = computed(() => batchTotalImages.value)
 const processingCount = computed(
-  () => mockStore.tasks.filter((t) => t.status === 'processing').length,
+  () => processingStore.tasks.filter((t) => t.status === 'processing').length,
 )
 const totalSamples = computed(() =>
   mockStore.datasets.reduce((s, d) => s + (d.sample_count || 0), 0),
@@ -55,7 +57,7 @@ function relativeTime(iso?: string): string {
 const activities = computed<ActivityItem[]>(() => {
   const raw: Array<ActivityItem & { ts: number }> = []
 
-  for (const t of mockStore.tasks) {
+  for (const t of processingStore.tasks) {
     const ts = +new Date(t.created_at)
     if (isNaN(ts)) continue
     const time = relativeTime(t.created_at)
@@ -65,7 +67,7 @@ const activities = computed<ActivityItem[]>(() => {
         badgeClass: 'badge-running',
         text: t.name,
         time: `${time} · ${Math.round(t.progress || 0)}%`,
-        to: `/process/tasks/${t.id}`,
+        to: `/process/tasks/${t.task_id}`,
         ts,
       })
     } else if (t.status === 'completed') {
@@ -74,7 +76,7 @@ const activities = computed<ActivityItem[]>(() => {
         badgeClass: 'badge-success',
         text: `${t.name} 已完成 · ${t.total_images ?? 0} 张`,
         time,
-        to: `/process/tasks/${t.id}`,
+        to: `/process/tasks/${t.task_id}`,
         ts,
       })
     } else {
@@ -83,7 +85,7 @@ const activities = computed<ActivityItem[]>(() => {
         badgeClass: 'badge-error',
         text: `${t.name} 失败`,
         time,
-        to: `/process/tasks/${t.id}`,
+        to: `/process/tasks/${t.task_id}`,
         ts,
       })
     }
@@ -112,7 +114,7 @@ onMounted(() => {
       batchCount.value = res.data.summary.total_batches
       batchTotalImages.value = res.data.summary.total_images
     }).catch(() => {}),
-    mockStore.fetchTasks(),
+    processingStore.fetchTasks(),
     mockStore.fetchDatasets(),
     modelStore.fetchModels(),
     countingStore.fetchHistory().catch(() => []),
@@ -170,7 +172,7 @@ onMounted(() => {
           <div class="text-sm font-semibold text-ink-primary">数据处理</div>
           <div class="text-xs text-ink-tertiary mt-1">CLAHE 增强、滑窗裁切，产出待标注数据集</div>
           <div class="text-xs text-brand-700 mt-2 font-medium">
-            {{ mockStore.taskTotal }} 次执行 · {{ processingCount }} 进行中
+            {{ processingStore.taskTotal }} 次执行 · {{ processingCount }} 进行中
           </div>
         </router-link>
 
