@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import SubTabs from '@/components/layout/SubTabs.vue'
 import DetectionViewer from '@/components/algo/DetectionViewer.vue'
@@ -14,18 +14,26 @@ const countingStore = useCountingStore()
 const modelStore = useModelStore()
 
 // ---- 文件上传模式状态 ----
-const selectedFile = ref<File | null>(null)
-const previewUrl = ref<string>('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const imgDimensions = ref<{ w: number; h: number } | null>(null)
 const isDragging = ref(false)
 
-function revokePreview() {
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
+// 原始文件由 store 持有，previewUrl 在 store.originalFile 变化时重新生成
+const previewUrl = ref<string>('')
+let currentObjectUrl = ''
+
+watchEffect(() => {
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl)
+    currentObjectUrl = ''
+  }
+  if (countingStore.originalFile) {
+    currentObjectUrl = URL.createObjectURL(countingStore.originalFile)
+    previewUrl.value = currentObjectUrl
+  } else {
     previewUrl.value = ''
   }
-}
+})
 
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement
@@ -36,21 +44,20 @@ function onFileChange(e: Event) {
 }
 
 function handleFileSelect(file: File) {
-  revokePreview()
-  selectedFile.value = file
-  previewUrl.value = URL.createObjectURL(file)
   imgDimensions.value = null
   imagePath.value = '' // 清空路径输入，优先使用文件上传
+  countingStore.setOriginalFile(file)
+  const url = URL.createObjectURL(file)
   const img = new Image()
   img.onload = () => {
     imgDimensions.value = { w: img.naturalWidth, h: img.naturalHeight }
+    URL.revokeObjectURL(url)
   }
-  img.src = previewUrl.value
+  img.src = url
 }
 
 function clearFile() {
-  revokePreview()
-  selectedFile.value = null
+  countingStore.clearOriginal()
   imgDimensions.value = null
 }
 
@@ -101,7 +108,7 @@ const isRunning = computed(
 
 const canSubmit = computed(() => {
   if (isRunning.value) return false
-  const hasFile = !!selectedFile.value
+  const hasFile = !!countingStore.originalFile
   const hasPath = !!(srcMode.value === 'single' ? imagePath.value.trim() : imagePath.value.trim())
   const hasModel = !!modelName.value
   return (hasFile || hasPath) && hasModel
@@ -225,8 +232,8 @@ async function onSubmit() {
       save_tiles: saveTiles.value,
       enhance: enhance.value,
     }
-    if (selectedFile.value) {
-      payload.image = selectedFile.value
+    if (countingStore.originalFile) {
+      payload.image = countingStore.originalFile
     } else {
       payload.image_path = srcMode.value === 'single' ? imagePath.value.trim() || undefined : undefined
       payload.image_dir = srcMode.value === 'dir' ? imagePath.value.trim() || undefined : undefined
@@ -305,7 +312,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  revokePreview()
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl)
+    currentObjectUrl = ''
+  }
 })
 
 onUnmounted(() => {
@@ -390,7 +400,7 @@ onUnmounted(() => {
             />
           </div>
           <!-- 已选择文件：缩略图 + 文件名 + 大小 -->
-          <div v-if="selectedFile" class="mt-3 flex items-center gap-3">
+          <div v-if="countingStore.originalFile" class="mt-3 flex items-center gap-3">
             <img
               v-if="previewUrl"
               :src="previewUrl"
@@ -400,10 +410,10 @@ onUnmounted(() => {
             <div class="text-xs text-ink-tertiary flex-1 min-w-0">
               <div class="flex items-center gap-1.5">
                 <Icon name="validate" :size="14" class="text-brand-700 flex-shrink-0" />
-                <span class="text-ink-primary font-medium truncate">{{ selectedFile.name }}</span>
+                <span class="text-ink-primary font-medium truncate">{{ countingStore.originalFile.name }}</span>
               </div>
               <div class="mt-0.5 font-numeric">
-                {{ formatSize(selectedFile.size) }}<span v-if="imgDimensions">
+                {{ formatSize(countingStore.originalFile.size) }}<span v-if="imgDimensions">
                   · {{ imgDimensions.w }}×{{ imgDimensions.h }}</span
                 >
               </div>
@@ -417,7 +427,7 @@ onUnmounted(() => {
             </button>
           </div>
           <!-- 本机路径输入（可选，用于服务器端路径模式） -->
-          <div class="mt-3 pt-3 border-t border-surface-border" v-if="!selectedFile">
+          <div class="mt-3 pt-3 border-t border-surface-border" v-if="!countingStore.originalFile">
             <div class="flex items-center gap-4 mb-3">
               <div
                 class="px-3 py-1 text-xs border-b-2 border-transparent cursor-pointer transition-colors"
@@ -453,7 +463,7 @@ onUnmounted(() => {
             />
           </div>
           <div
-            v-if="imageBasename && !selectedFile"
+            v-if="imageBasename && !countingStore.originalFile"
             class="mt-3 text-xs text-ink-tertiary flex items-center gap-1.5"
           >
             <Icon name="validate" :size="14" class="text-brand-700 flex-shrink-0" />
@@ -736,7 +746,7 @@ onUnmounted(() => {
             :original-image="previewUrl"
             :result-image="countingStore.result?.annotated_image"
             :loading="isRunning"
-            :original-empty-text="selectedFile ? '等待上传' : (imageBasename ? `原图：${imageBasename}（本机路径无法预览）` : '原图为本机路径，无法在浏览器预览')"
+            :original-empty-text="countingStore.originalFile ? '等待上传' : (imageBasename ? `原图：${imageBasename}（本机路径无法预览）` : '原图为本机路径，无法在浏览器预览')"
             result-label="检测结果（红色框 · 已计数）"
             :show-count-badge="true"
             :count="countingStore.result.count"

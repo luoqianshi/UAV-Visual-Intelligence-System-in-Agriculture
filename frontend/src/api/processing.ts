@@ -88,7 +88,7 @@ export const processingApi = {
   },
   submitCrop: (data: { name: string; input_paths: string[]; params: { tile_size: number; overlap_ratio: number } }) =>
     client.post<unknown, { data: ProcessingTask }>('/processing/crop', data),
-  listFiles: (taskId: string, params?: { sub_dir?: string; page?: number; page_size?: number }) =>
+  listFiles: (taskId: string, params?: { sub_dir?: string; page?: number; page_size?: number; filename_prefix?: string }) =>
     client.get<unknown, { data: TaskFileList }>(`/processing/tasks/${taskId}/files`, { params }),
   previewUrl: (taskId: string, filename: string, subDir?: string, size = 'medium') => {
     const q = new URLSearchParams({ filename, size })
@@ -100,7 +100,7 @@ export const processingApi = {
     client.get<unknown, { data: ProcessedListResponse }>('/processing/processed'),
   getProcessed: (processedId: string) =>
     client.get<unknown, { data: ProcessedItem }>(`/processing/processed/${processedId}`),
-  listProcessedFiles: (processedId: string, params?: { sub_dir?: string; page?: number; page_size?: number }) =>
+  listProcessedFiles: (processedId: string, params?: { sub_dir?: string; page?: number; page_size?: number; filename_prefix?: string }) =>
     client.get<unknown, { data: TaskFileList }>(`/processing/processed/${processedId}/files`, { params }),
   deleteProcessed: (processedId: string, deleteOutput = false) =>
     client.delete<unknown, { data: null }>(`/processing/processed/${processedId}`, { params: { delete_output: deleteOutput } }),

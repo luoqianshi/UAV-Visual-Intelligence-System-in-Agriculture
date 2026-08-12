@@ -10,7 +10,27 @@ export const useCountingStore = defineStore('counting', () => {
   const result = shallowRef<CountingReport | null>(null)
   const history = ref<any[]>([])
 
+  // 已上传的原始文件（用于在导航离开/返回时保持原图预览）
+  const originalFile = shallowRef<File | null>(null)
+
   let pollTimer: ReturnType<typeof setInterval> | null = null
+
+  function setOriginalFile(f: File | null) {
+    originalFile.value = f
+  }
+
+  function clearOriginal() {
+    originalFile.value = null
+  }
+
+  function clearAll() {
+    originalFile.value = null
+    result.value = null
+    error.value = ''
+    status.value = 'idle'
+    progress.value = 0
+    taskId.value = ''
+  }
 
   async function submit(payload: { image?: File; image_path?: string; image_dir?: string; model_name?: string } & CountingParams) {
     error.value = ''
@@ -18,6 +38,12 @@ export const useCountingStore = defineStore('counting', () => {
     progress.value = 0
     status.value = 'pending'
     taskId.value = ''
+    if (payload.image) {
+      originalFile.value = payload.image
+    } else {
+      // 使用本机路径模式时清空文件
+      originalFile.value = null
+    }
     let res
     if (payload.image) {
       const { image, model_name, ...params } = payload
@@ -65,5 +91,9 @@ export const useCountingStore = defineStore('counting', () => {
     history.value = res.data
   }
 
-  return { taskId, status, progress, error, result, history, submit, stopPolling, fetchHistory }
+  return {
+    taskId, status, progress, error, result, history, originalFile,
+    setOriginalFile, clearOriginal, clearAll,
+    submit, stopPolling, fetchHistory,
+  }
 })

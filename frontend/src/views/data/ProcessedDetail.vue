@@ -2,6 +2,7 @@
 import AppLayout from '@/components/layout/AppLayout.vue'
 import DataSubTabs from '@/components/layout/DataSubTabs.vue'
 import Icon from '@/components/common/Icon.vue'
+import ImageViewer from '@/components/common/ImageViewer.vue'
 import { processingApi, type ProcessedItem, type TaskFile } from '@/api/processing'
 import { useRoute, useRouter } from 'vue-router'
 import { ref, computed, onMounted } from 'vue'
@@ -13,8 +14,25 @@ const id = computed(() => String(route.params.id))
 const item = ref<ProcessedItem | null>(null)
 const loading = ref(true)
 const errorMsg = ref('')
-const files = ref<TaskFile[]>([])
+
+// 当前展开的子目录 + 该子目录已加载的图片列表（用于渐进式加载）
 const expandedSubDir = ref<string | null>(null)
+const subDirFiles = ref<Record<string, { files: TaskFile[]; total: number; page: number; totalPages: number; loading: boolean }>>({})
+
+// 大图查看器
+const viewerVisible = ref(false)
+const viewerSrc = ref('')
+const viewerAlt = ref('')
+function openViewer(src: string, alt: string) {
+  if (!src) return
+  viewerSrc.value = src
+  viewerAlt.value = alt
+  viewerVisible.value = true
+}
+function previewUrl(filename: string, subDir: string, size: 'thumbnail' | 'medium' | 'original' = 'medium'): string {
+  if (!item.value) return ''
+  return processingApi.previewUrl(item.value.task_id, filename, subDir, size)
+}
 
 function statusBadge(status: string): { cls: string; label: string } {
   const s = (status || '').toLowerCase()
@@ -24,6 +42,8 @@ function statusBadge(status: string): { cls: string; label: string } {
   return { cls: 'badge-pending', label: status || '—' }
 }
 
+const IMAGE_PAGE_SIZE = 36
+
 async function load() {
   loading.value = true
   errorMsg.value = ''
@@ -32,7 +52,7 @@ async function load() {
     item.value = res.data
     if (item.value.sub_dirs.length > 0) {
       expandedSubDir.value = item.value.sub_dirs[0].sub_dir
-      await loadFiles(item.value.sub_dirs[0].sub_dir)
+      await loadFiles(item.value.sub_dirs[0].sub_dir, 1, true)
     }
   } catch (e: any) {
     errorMsg.value = e.message || '加载失败'
@@ -41,23 +61,47 @@ async function load() {
   }
 }
 
-async function loadFiles(subDir: string) {
+async function loadFiles(subDir: string, page: number, reset: boolean) {
   if (!item.value) return
+  const cur = subDirFiles.value[subDir] || { files: [], total: 0, page: 0, totalPages: 1, loading: false }
+  if (cur.loading) return
+  cur.loading = true
+  subDirFiles.value = { ...subDirFiles.value, [subDir]: { ...cur } }
   try {
-    const res = await processingApi.listProcessedFiles(id.value, { sub_dir: subDir, page: 1, page_size: 50 })
-    files.value = res.data.files
+    const res = await processingApi.listProcessedFiles(item.value.task_id, {
+      sub_dir: subDir,
+      page,
+      page_size: IMAGE_PAGE_SIZE,
+    })
+    const next = {
+      files: reset ? res.data.files : [...(cur.files || []), ...res.data.files],
+      total: res.data.total,
+      page: res.data.page,
+      totalPages: res.data.total_pages,
+      loading: false,
+    }
+    subDirFiles.value = { ...subDirFiles.value, [subDir]: next }
   } catch {
-    files.value = []
+    subDirFiles.value = { ...subDirFiles.value, [subDir]: { ...cur, loading: false } }
   }
 }
 
 async function toggleSubDir(subDir: string) {
   if (expandedSubDir.value === subDir) {
     expandedSubDir.value = null
-    files.value = []
   } else {
     expandedSubDir.value = subDir
-    await loadFiles(subDir)
+    if (!subDirFiles.value[subDir]) {
+      await loadFiles(subDir, 1, true)
+    }
+  }
+}
+
+function loadMore(subDir: string) {
+  const cur = subDirFiles.value[subDir]
+  if (!cur || cur.loading) return
+  if (cur.page < cur.totalPages) {
+    loadFiles(subDir, cur.page + 1, false)
   }
 }
 
@@ -70,6 +114,11 @@ async function deleteItem() {
   } catch (e: any) {
     alert(e.message || '删除失败')
   }
+}
+
+function onImgError(e: Event) {
+  const img = e.target as HTMLImageElement
+  img.style.display = 'none'
 }
 
 onMounted(load)
@@ -111,6 +160,12 @@ onMounted(load)
           <p class="text-sm text-ink-secondary mt-1">
             生成于 {{ item.created_at }} · {{ item.image_count }} 张图片
           </p>
+          <!-- 真实输出路径 -->
+          <p class="text-xs text-ink-tertiary mt-1.5 flex items-center gap-1.5 font-mono">
+            <Icon name="folder-open" :size="12" class="flex-shrink-0" />
+            <span>输出路径：</span>
+            <span class="text-ink-secondary break-all">{{ item.output_path }}</span>
+          </p>
         </div>
         <div class="flex gap-2">
           <router-link
@@ -147,7 +202,7 @@ onMounted(load)
         </div>
       </div>
 
-      <!-- 子目录与图片 -->
+      <!-- 子目录与图片（渐进式加载） -->
       <div class="space-y-3">
         <div
           v-for="sub in item.sub_dirs"
@@ -161,7 +216,9 @@ onMounted(load)
             <div class="flex items-center gap-2">
               <Icon name="folder" :size="16" class="text-ink-tertiary" />
               <span class="font-medium text-ink-primary">{{ sub.sub_dir }}</span>
-              <span class="text-xs text-ink-tertiary">{{ sub.image_count }} 张</span>
+              <span class="text-xs text-ink-tertiary">
+                {{ sub.image_count }} 张<span v-if="sub.tiles_count"> · {{ sub.tiles_count }} tiles</span>
+              </span>
             </div>
             <Icon
               :name="expandedSubDir === sub.sub_dir ? 'chevron-down' : 'chevron-right'"
@@ -170,20 +227,58 @@ onMounted(load)
             />
           </div>
           <div v-if="expandedSubDir === sub.sub_dir" class="p-5">
-            <div v-if="files.length === 0" class="text-center text-ink-tertiary text-sm py-4">暂无图片</div>
-            <div v-else class="grid grid-cols-6 gap-3">
-              <div v-for="f in files" :key="f.filename" class="text-center">
-                <img
-                  :src="f.thumbnail_url"
-                  :alt="f.filename"
-                  class="w-full aspect-square object-cover rounded-btn border border-surface-border"
-                />
-                <div class="text-xs text-ink-tertiary mt-1 truncate">{{ f.filename }}</div>
+            <div
+              v-if="!subDirFiles[sub.sub_dir] || (subDirFiles[sub.sub_dir].files.length === 0 && !subDirFiles[sub.sub_dir].loading)"
+              class="text-center text-ink-tertiary text-sm py-4"
+            >
+              暂无图片
+            </div>
+            <div v-else>
+              <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                <div
+                  v-for="f in subDirFiles[sub.sub_dir].files"
+                  :key="f.filename"
+                  class="text-center cursor-zoom-in group"
+                  @click="openViewer(previewUrl(f.filename, sub.sub_dir, 'original'), `${sub.sub_dir} / ${f.filename}`)"
+                >
+                  <div class="aspect-square bg-gradient-to-br from-green-50 to-amber-50 rounded-btn border border-surface-border overflow-hidden relative">
+                    <img
+                      :src="f.thumbnail_url"
+                      :alt="f.filename"
+                      loading="lazy"
+                      class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                      @error="onImgError"
+                    />
+                  </div>
+                  <div class="text-[10px] text-ink-tertiary mt-1 truncate font-mono" :title="f.filename">{{ f.filename }}</div>
+                </div>
+              </div>
+
+              <!-- 加载更多 -->
+              <div class="mt-4 flex flex-col items-center gap-2">
+                <template v-if="subDirFiles[sub.sub_dir].page < subDirFiles[sub.sub_dir].totalPages">
+                  <button
+                    type="button"
+                    :disabled="subDirFiles[sub.sub_dir].loading"
+                    @click="loadMore(sub.sub_dir)"
+                    class="px-5 py-2 border border-surface-border hover:bg-surface-hover text-ink-primary rounded-btn text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <Icon v-if="subDirFiles[sub.sub_dir].loading" name="spinner" :size="14" :spin="true" />
+                    {{ subDirFiles[sub.sub_dir].loading ? '加载中…' : '加载更多' }}
+                  </button>
+                </template>
+                <span class="text-xs text-ink-tertiary font-numeric">
+                  已加载 {{ subDirFiles[sub.sub_dir].files.length }} / {{ subDirFiles[sub.sub_dir].total }} 张
+                  <span v-if="subDirFiles[sub.sub_dir].page >= subDirFiles[sub.sub_dir].totalPages">· 已全部加载</span>
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- 大图查看器 -->
+      <ImageViewer v-model:visible="viewerVisible" :src="viewerSrc" :alt="viewerAlt" />
     </template>
   </AppLayout>
 </template>

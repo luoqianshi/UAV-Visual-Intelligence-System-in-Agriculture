@@ -7,15 +7,33 @@ export const useDetectStore = defineStore('detect', () => {
   const loading = ref(false)
   const error = ref('')
 
+  // 已上传的原始文件（用于在导航离开/返回时保持原图预览）
+  const originalFile = shallowRef<File | null>(null)
+
   // 批量异步
   const batchTaskId = ref('')
   const batchStatus = ref<TaskStatus | null>(null)
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
+  function setOriginalFile(f: File | null) {
+    originalFile.value = f
+  }
+
+  function clearOriginal() {
+    originalFile.value = null
+  }
+
+  function clearAll() {
+    originalFile.value = null
+    result.value = null
+    error.value = ''
+  }
+
   async function detectSingle(file: File, model_name?: string, params?: Record<string, any>) {
     loading.value = true
     error.value = ''
     result.value = null
+    originalFile.value = file
     try {
       const res = await detectApi.detectSingle(file, model_name, params)
       result.value = res.data
@@ -58,5 +76,10 @@ export const useDetectStore = defineStore('detect', () => {
     }
   }
 
-  return { result, loading, error, batchTaskId, batchStatus, detectSingle, detectBatch, stopPolling }
+  return {
+    result, loading, error, originalFile,
+    batchTaskId, batchStatus,
+    setOriginalFile, clearOriginal, clearAll,
+    detectSingle, detectBatch, stopPolling,
+  }
 })

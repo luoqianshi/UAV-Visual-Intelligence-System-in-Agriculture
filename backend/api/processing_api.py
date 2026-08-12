@@ -166,7 +166,7 @@ def get_task(task_id):
 # ── 结果文件清单 ──────────────────────────────────────────────
 @processing_bp.route("/api/processing/tasks/<task_id>/files", methods=["GET"])
 def list_task_files(task_id):
-    """GET /api/processing/tasks/<task_id>/files?sub_dir=&page=&page_size="""
+    """GET /api/processing/tasks/<task_id>/files?sub_dir=&page=&page_size=&filename_prefix="""
     registry = get_processing_registry()
     if registry is None:
         return _error("registry 未初始化", 503)
@@ -178,6 +178,7 @@ def list_task_files(task_id):
     sub_dir = request.args.get("sub_dir")
     page = max(1, int(request.args.get("page", 1)))
     page_size = min(200, max(1, int(request.args.get("page_size", 50))))
+    filename_prefix = request.args.get("filename_prefix", "").strip()
 
     out_dir = _get_output_dir(cfg)
     target_dir = out_dir / sub_dir if sub_dir else out_dir
@@ -188,6 +189,8 @@ def list_task_files(task_id):
         f for f in target_dir.iterdir()
         if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
     ])
+    if filename_prefix:
+        files = [f for f in files if f.name.startswith(filename_prefix)]
     total = len(files)
     total_pages = max(1, (total + page_size - 1) // page_size)
     start = (page - 1) * page_size

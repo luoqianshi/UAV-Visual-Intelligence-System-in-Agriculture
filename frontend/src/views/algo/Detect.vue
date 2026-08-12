@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import SubTabs from '@/components/layout/SubTabs.vue'
 import DetectionViewer from '@/components/algo/DetectionViewer.vue'
@@ -11,18 +11,26 @@ import Icon from '@/components/common/Icon.vue'
 const detectStore = useDetectStore()
 const modelStore = useModelStore()
 
-const selectedFile = ref<File | null>(null)
-const previewUrl = ref<string>('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const imgDimensions = ref<{ w: number; h: number } | null>(null)
 const isDragging = ref(false)
 
-function revokePreview() {
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
+// 原始文件由 store 持有，previewUrl 在 store.originalFile 变化时重新生成
+const previewUrl = ref<string>('')
+let currentObjectUrl = ''
+
+watchEffect(() => {
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl)
+    currentObjectUrl = ''
+  }
+  if (detectStore.originalFile) {
+    currentObjectUrl = URL.createObjectURL(detectStore.originalFile)
+    previewUrl.value = currentObjectUrl
+  } else {
     previewUrl.value = ''
   }
-}
+})
 
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement
@@ -33,20 +41,20 @@ function onFileChange(e: Event) {
 }
 
 function handleFileSelect(file: File) {
-  revokePreview()
-  selectedFile.value = file
-  previewUrl.value = URL.createObjectURL(file)
   imgDimensions.value = null
+  detectStore.setOriginalFile(file)
+  // 重新读取尺寸
+  const url = URL.createObjectURL(file)
   const img = new Image()
   img.onload = () => {
     imgDimensions.value = { w: img.naturalWidth, h: img.naturalHeight }
+    URL.revokeObjectURL(url)
   }
-  img.src = previewUrl.value
+  img.src = url
 }
 
 function clearFile() {
-  revokePreview()
-  selectedFile.value = null
+  detectStore.clearOriginal()
   imgDimensions.value = null
 }
 
@@ -98,7 +106,7 @@ const maxDet = ref(300)
 const device = ref<string>('')
 
 const canDetect = computed(
-  () => !!selectedFile.value && !detectStore.loading && !!selectedModel.value,
+  () => !!detectStore.originalFile && !detectStore.loading && !!selectedModel.value,
 )
 
 const activeModelDisplay = computed(() => {
@@ -107,8 +115,8 @@ const activeModelDisplay = computed(() => {
 })
 
 async function onDetect() {
-  if (!selectedFile.value || !selectedModel.value) return
-  await detectStore.detectSingle(selectedFile.value, selectedModel.value, {
+  if (!detectStore.originalFile || !selectedModel.value) return
+  await detectStore.detectSingle(detectStore.originalFile, selectedModel.value, {
     conf: conf.value,
     iou: iou.value,
     imgsz: imgsz.value,
@@ -148,7 +156,10 @@ function downloadJson() {
 }
 
 onBeforeUnmount(() => {
-  revokePreview()
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl)
+    currentObjectUrl = ''
+  }
   detectStore.stopPolling()
 })
 </script>
@@ -221,7 +232,7 @@ onBeforeUnmount(() => {
               @change="onFileChange"
             />
           </div>
-          <div v-if="selectedFile" class="mt-3 flex items-center gap-3">
+          <div v-if="detectStore.originalFile" class="mt-3 flex items-center gap-3">
             <img
               v-if="previewUrl"
               :src="previewUrl"
@@ -231,10 +242,10 @@ onBeforeUnmount(() => {
             <div class="text-xs text-ink-tertiary flex-1 min-w-0">
               <div class="flex items-center gap-1.5">
                 <Icon name="validate" :size="14" class="text-brand-700 flex-shrink-0" />
-                <span class="text-ink-primary font-medium truncate">{{ selectedFile.name }}</span>
+                <span class="text-ink-primary font-medium truncate">{{ detectStore.originalFile.name }}</span>
               </div>
               <div class="mt-0.5 font-numeric">
-                {{ formatSize(selectedFile.size) }}<span v-if="imgDimensions">
+                {{ formatSize(detectStore.originalFile.size) }}<span v-if="imgDimensions">
                   · {{ imgDimensions.w }}×{{ imgDimensions.h }}</span
                 >
               </div>
