@@ -1,8 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { mockApi, type ProcessingTask } from '@/api/mock'
+import { processingApi, type ProcessingTask } from '@/api/processing'
 import { useRoute } from 'vue-router'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 // 1:1 迁移 process/task-detail.html：任务参数 + 结果预览(网格/对比) + 执行日志
 const route = useRoute()
@@ -12,11 +12,14 @@ const task = ref<ProcessingTask | null>(null)
 const loading = ref(true)
 const errorMsg = ref('')
 const previewMode = ref<'grid' | 'compare'>('grid')
+const previewFiles = ref<{ filename: string; sub_dir?: string; thumbnail_url: string }[]>([])
+let pollTimer: number | undefined
 
 function statusBadge(status: string): { cls: string; label: string } {
   if (status === 'processing') return { cls: 'badge-running', label: '进行中' }
   if (status === 'completed') return { cls: 'badge-success', label: '已完成' }
   if (status === 'failed') return { cls: 'badge-error', label: '失败' }
+  if (status === 'interrupted') return { cls: 'badge-error', label: '已中断' }
   return { cls: 'badge-pending', label: status || '待处理' }
 }
 function typeLabel(type: string) {
@@ -34,24 +37,41 @@ const successRate = computed(() => {
   if (!task.value || !task.value.total_images) return task.value?.status === 'completed' ? 100 : 0
   return Math.round(((task.value.processed_images || 0) / task.value.total_images) * 100)
 })
-
-const previewFiles = computed(() => {
-  if (!task.value) return []
-  // 取输出路径下示意文件名
-  const n = 6
-  return Array.from({ length: n }, (_, i) => `DJI_${String(i + 1).padStart(4, '0')}.jpg`)
+const gridLabel = computed(() => {
+  const g = task.value?.params?.grid_size
+  return g ? `${g[0]} × ${g[1]}` : '8 × 8'
 })
+const inputLabel = computed(() => task.value?.input_paths?.[0] || '-')
 
-function onImgError(e: Event) {
-  (e.target as HTMLImageElement).style.opacity = '0'
+async function loadPreviewFiles() {
+  if (!task.value) return
+  try {
+    const subDir = task.value.sub_dirs[0]?.sub_dir
+    const res = await processingApi.listFiles(task.value.task_id, { sub_dir: subDir, page: 1, page_size: 12 })
+    previewFiles.value = res.data.files.map(f => ({
+      filename: f.filename,
+      sub_dir: subDir,
+      thumbnail_url: f.thumbnail_url,
+    }))
+  } catch {
+    previewFiles.value = []
+  }
 }
 
 async function load() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const res = await mockApi.fetchTask(id.value)
+    const res = await processingApi.get(id.value)
     task.value = res.data
+    // 已完成的任务加载预览文件
+    if (task.value.status === 'completed') {
+      await loadPreviewFiles()
+    }
+    // 处理中任务：轮询
+    if (task.value.status === 'processing' || task.value.status === 'pending') {
+      startPolling()
+    }
   } catch (e: any) {
     errorMsg.value = e.message || '加载任务详情失败'
   } finally {
@@ -59,7 +79,31 @@ async function load() {
   }
 }
 
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = window.setInterval(async () => {
+    try {
+      const r = await processingApi.get(id.value)
+      task.value = r.data
+      if (['completed', 'failed', 'interrupted'].includes(r.data.status)) {
+        stopPolling()
+        if (r.data.status === 'completed') {
+          await loadPreviewFiles()
+        }
+      }
+    } catch {}
+  }, 2000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = undefined
+  }
+}
+
 onMounted(load)
+onUnmounted(stopPolling)
 </script>
 
 <template>
@@ -89,9 +133,9 @@ onMounted(load)
           <div class="flex items-center gap-3">
             <h1 class="text-2xl font-semibold text-ink-primary">{{ task.name }}</h1>
             <span class="badge" :class="statusBadge(task.status).cls">{{ statusBadge(task.status).label }}</span>
-            <span class="tag" :class="typeTag(task.type)">{{ typeLabel(task.type) }}</span>
+            <span class="tag" :class="typeTag(task.task_type)">{{ typeLabel(task.task_type) }}</span>
           </div>
-          <p class="text-sm text-ink-secondary mt-1">{{ task.batch_id }} · 开始于 {{ task.created_at }}{{ task.completed_at ? ' · 完成于 ' + task.completed_at : '' }}</p>
+          <p class="text-sm text-ink-secondary mt-1">{{ inputLabel }} · 开始于 {{ task.created_at }}{{ task.completed_at ? ' · 完成于 ' + task.completed_at : '' }}</p>
         </div>
         <div class="flex gap-2">
           <button class="px-3 py-2 bg-white border border-surface-border hover:bg-surface-hover rounded-btn text-sm text-ink-primary inline-flex items-center gap-2">
@@ -136,9 +180,9 @@ onMounted(load)
           <div class="bg-white border border-surface-border rounded-card p-5">
             <h3 class="text-sm font-semibold text-ink-primary mb-3">任务参数</h3>
             <div class="grid grid-cols-4 gap-4 pt-4 border-t border-surface-border">
-              <div><div class="text-xs text-ink-tertiary mb-1">输入源</div><div class="text-sm font-medium text-ink-primary">{{ task.batch_id }}</div></div>
-              <div><div class="text-xs text-ink-tertiary mb-1">{{ task.type === 'clahe' ? '阈值 (clipLimit)' : '切片尺寸' }}</div><div class="text-sm font-medium text-ink-primary">{{ task.type === 'clahe' ? (task.params?.clip_limit ?? '2.0') : (task.params?.tile_size ?? '640') }}</div></div>
-              <div><div class="text-xs text-ink-tertiary mb-1">{{ task.type === 'clahe' ? '网格数量' : '重叠率' }}</div><div class="text-sm font-medium text-ink-primary">{{ task.type === 'clahe' ? (task.params?.grid ?? '8 × 8') : (task.params?.overlap_ratio ?? '0.1') }}</div></div>
+              <div><div class="text-xs text-ink-tertiary mb-1">输入源</div><div class="text-sm font-medium text-ink-primary">{{ inputLabel }}</div></div>
+              <div><div class="text-xs text-ink-tertiary mb-1">{{ task.task_type === 'clahe' ? '阈值 (clipLimit)' : '切片尺寸' }}</div><div class="text-sm font-medium text-ink-primary">{{ task.task_type === 'clahe' ? (task.params?.clip_limit ?? '2.0') : (task.params?.tile_size ?? '640') }}</div></div>
+              <div><div class="text-xs text-ink-tertiary mb-1">{{ task.task_type === 'clahe' ? '网格数量' : '重叠率' }}</div><div class="text-sm font-medium text-ink-primary">{{ task.task_type === 'clahe' ? gridLabel : (task.params?.overlap_ratio ?? '0.1') }}</div></div>
               <div><div class="text-xs text-ink-tertiary mb-1">输出目录</div><div class="text-sm font-mono text-ink-primary truncate">{{ task.output_path }}</div></div>
             </div>
           </div>
@@ -162,13 +206,18 @@ onMounted(load)
             </div>
 
             <!-- 缩略图网格 -->
-            <div v-if="previewMode === 'grid'" class="grid grid-cols-3 gap-3">
-              <div v-for="f in previewFiles" :key="f" class="border border-surface-border rounded-card overflow-hidden">
-                <div class="aspect-square bg-gradient-to-br from-green-50 to-amber-50 flex items-center justify-center relative">
-                  <img :src="mockApi.taskPreviewUrl(id)" :alt="f" class="w-full h-full object-cover" @error="onImgError" />
-                  <i class="fa-solid fa-image text-2xl text-ink-tertiary opacity-30 absolute"></i>
+            <div v-if="previewMode === 'grid'">
+              <div v-if="previewFiles.length === 0" class="py-12 text-center text-xs text-ink-tertiary">
+                暂无预览图
+              </div>
+              <div v-else class="grid grid-cols-3 gap-3">
+                <div v-for="f in previewFiles" :key="f.filename" class="border border-surface-border rounded-card overflow-hidden">
+                  <div class="aspect-square bg-gradient-to-br from-green-50 to-amber-50 flex items-center justify-center relative">
+                    <img :src="f.thumbnail_url" :alt="f.filename" class="w-full h-full object-cover" />
+                    <i class="fa-solid fa-image text-2xl text-ink-tertiary opacity-30 absolute"></i>
+                  </div>
+                  <div class="p-2 text-xs"><div class="font-mono text-ink-primary truncate">{{ f.filename }}</div></div>
                 </div>
-                <div class="p-2 text-xs"><div class="font-mono text-ink-primary truncate">{{ f }}</div></div>
               </div>
             </div>
 
@@ -178,18 +227,17 @@ onMounted(load)
                 <div>
                   <div class="text-xs text-ink-tertiary mb-2 flex items-center gap-1.5"><i class="fa-regular fa-image"></i> 原图</div>
                   <div class="aspect-[4/3] bg-gradient-to-br from-green-50 to-amber-50 rounded-btn flex items-center justify-center border border-surface-border relative">
-                    <img :src="mockApi.taskPreviewUrl(id, 'original')" class="w-full h-full object-cover rounded-btn" @error="onImgError" />
-                    <i class="fa-solid fa-image text-3xl text-ink-tertiary opacity-30 absolute"></i>
+                    <i class="fa-solid fa-image text-3xl text-ink-tertiary opacity-30"></i>
                   </div>
-                  <div class="mt-1.5 text-xs font-mono text-ink-primary">{{ previewFiles[0] }} · 原图</div>
+                  <div class="mt-1.5 text-xs font-mono text-ink-primary">{{ previewFiles[0]?.filename || '—' }} · 原图</div>
                 </div>
                 <div>
-                  <div class="text-xs text-ink-tertiary mb-2 flex items-center gap-1.5"><i class="fa-solid fa-wand-magic-sparkles text-brand-700"></i> {{ typeLabel(task.type) }} 结果</div>
+                  <div class="text-xs text-ink-tertiary mb-2 flex items-center gap-1.5"><i class="fa-solid fa-wand-magic-sparkles text-brand-700"></i> {{ typeLabel(task.task_type) }} 结果</div>
                   <div class="aspect-[4/3] bg-gradient-to-br from-emerald-50 to-green-100 rounded-btn flex items-center justify-center border border-brand-100 relative">
-                    <img :src="mockApi.taskPreviewUrl(id, 'result')" class="w-full h-full object-cover rounded-btn" @error="onImgError" />
-                    <i class="fa-solid fa-image text-3xl text-brand-300 opacity-40 absolute"></i>
+                    <img v-if="previewFiles[0]" :src="previewFiles[0].thumbnail_url" :alt="previewFiles[0].filename" class="w-full h-full object-cover rounded-btn" />
+                    <i v-else class="fa-solid fa-image text-3xl text-brand-300 opacity-40"></i>
                   </div>
-                  <div class="mt-1.5 text-xs font-mono text-ink-primary">{{ previewFiles[0] }} · 结果</div>
+                  <div class="mt-1.5 text-xs font-mono text-ink-primary">{{ previewFiles[0]?.filename || '—' }} · 结果</div>
                 </div>
               </div>
               <div class="mt-3 flex items-center text-xs text-ink-tertiary">
@@ -202,9 +250,9 @@ onMounted(load)
           <div class="bg-white border border-surface-border rounded-card p-5">
             <h3 class="text-sm font-semibold text-ink-primary mb-3">执行日志</h3>
             <div class="font-mono text-xs bg-surface-bg rounded-btn p-3 leading-6 text-ink-secondary">
-              <div><span class="text-ink-tertiary">[{{ task.created_at }}]</span> 任务启动 · TASK_ID={{ task.id }}</div>
-              <div><span class="text-ink-tertiary">[{{ task.created_at }}]</span> 加载输入：{{ task.batch_id }} ({{ task.total_images }} 张)</div>
-              <div><span class="text-ink-tertiary">[运行]</span> 参数：{{ task.type === 'clahe' ? `clipLimit=${task.params?.clip_limit ?? 2.0}` : `tile=${task.params?.tile_size ?? 640}, overlap=${task.params?.overlap_ratio ?? 0.1}` }}</div>
+              <div><span class="text-ink-tertiary">[{{ task.created_at }}]</span> 任务启动 · TASK_ID={{ task.task_id }}</div>
+              <div><span class="text-ink-tertiary">[{{ task.created_at }}]</span> 加载输入：{{ inputLabel }} ({{ task.total_images }} 张)</div>
+              <div><span class="text-ink-tertiary">[运行]</span> 参数：{{ task.task_type === 'clahe' ? `clipLimit=${task.params?.clip_limit ?? 2.0}` : `tile=${task.params?.tile_size ?? 640}, overlap=${task.params?.overlap_ratio ?? 0.1}` }}</div>
               <div v-if="task.status === 'processing'"><span class="text-ink-tertiary">[运行中]</span> 处理进度：{{ task.processed_images }}/{{ task.total_images }} ({{ task.progress }}%)</div>
               <div v-if="task.status === 'completed'"><span class="text-brand-700">[完成]</span> 任务完成 · 输出 {{ task.output_path }}</div>
               <div v-if="task.status === 'failed'"><span class="text-red-600">[失败]</span> {{ task.error || '执行异常' }}</div>
@@ -217,12 +265,12 @@ onMounted(load)
           <div class="bg-white border border-surface-border rounded-card p-5">
             <h3 class="text-sm font-semibold text-ink-primary mb-3">任务信息</h3>
             <div class="space-y-2.5 text-xs">
-              <div class="flex justify-between"><span class="text-ink-tertiary">任务 ID</span><span class="font-mono text-ink-primary">{{ task.id }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">类型</span><span class="text-ink-primary">{{ typeLabel(task.type) }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">任务 ID</span><span class="font-mono text-ink-primary">{{ task.task_id }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">类型</span><span class="text-ink-primary">{{ typeLabel(task.task_type) }}</span></div>
               <div class="flex justify-between"><span class="text-ink-tertiary">创建者</span><span class="text-ink-primary">李研究员</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">开始时间</span><span class="text-ink-primary">{{ task.created_at }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">开始时间</span><span class="text-ink-primary">{{ task.started_at || task.created_at }}</span></div>
               <div class="flex justify-between"><span class="text-ink-tertiary">结束时间</span><span class="text-ink-primary">{{ task.completed_at || '—' }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">输入路径</span><span class="font-mono text-ink-primary text-[11px]">{{ task.input_path }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">输入路径</span><span class="font-mono text-ink-primary text-[11px]">{{ inputLabel }}</span></div>
               <div class="flex justify-between"><span class="text-ink-tertiary">设备</span><span class="text-ink-primary">CPU · 8 workers</span></div>
             </div>
           </div>
