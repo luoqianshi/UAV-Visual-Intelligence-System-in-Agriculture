@@ -1,11 +1,11 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { useMockStore } from '@/stores/mock'
+import { useProcessingStore } from '@/stores/processing'
 import { ref, computed, onMounted } from 'vue'
-import type { ProcessingTask } from '@/api/mock'
+import type { ProcessingTask } from '@/api/processing'
 
 // 1:1 迁移 process/tasks.html：按方法分组（CLAHE 增强 / 滑窗裁切）的任务表格
-const store = useMockStore()
+const store = useProcessingStore()
 const filterType = ref('') // '' | 'clahe' | 'crop'
 const filterStatus = ref('') // '' | 'processing' | 'completed' | 'failed'
 const errorMsg = ref('')
@@ -30,7 +30,7 @@ function typeLabel(type: string) {
 }
 
 function tasksOfType(type: string): ProcessingTask[] {
-  return store.tasks.filter((t) => t.type === type)
+  return store.tasks.filter((t) => t.task_type === type)
 }
 
 function groupStats(type: string) {
@@ -154,16 +154,16 @@ onMounted(applyFilters)
             <tr
               v-for="(t, i) in tasksOfType(g.type)"
               v-else
-              :key="t.id"
+              :key="t.task_id"
               class="border-t border-surface-border"
             >
               <td class="py-2.5 px-5 text-ink-tertiary font-mono text-xs">#{{ String(tasksOfType(g.type).length - i).padStart(3, '0') }}</td>
               <td class="py-2.5 px-5">
-                <router-link :to="`/process/tasks/${t.id}`" class="font-medium text-ink-primary hover:text-brand-700">{{ t.name }}</router-link>
+                <router-link :to="`/process/tasks/${t.task_id}`" class="font-medium text-ink-primary hover:text-brand-700">{{ t.name }}</router-link>
                 <div class="text-xs text-ink-tertiary mt-0.5">{{ t.params?.clip_limit ? `clipLimit ${t.params.clip_limit}` : '' }}{{ t.params?.tile_size ? ` · tile ${t.params.tile_size}` : '' }}{{ t.params?.overlap_ratio ? ` · overlap ${t.params.overlap_ratio}` : '' }}</div>
               </td>
-              <td class="py-2.5 px-5"><span class="tag" :class="typeTag(t.type)">{{ typeLabel(t.type) }}</span></td>
-              <td class="py-2.5 px-5 text-ink-secondary text-xs">{{ t.batch_id }}</td>
+              <td class="py-2.5 px-5"><span class="tag" :class="typeTag(t.task_type)">{{ typeLabel(t.task_type) }}</span></td>
+              <td class="py-2.5 px-5 text-ink-secondary text-xs">{{ t.input_paths?.[0] || '-' }}</td>
               <td class="py-2.5 px-5 text-ink-tertiary font-mono text-xs">{{ t.output_path }}</td>
               <td class="py-2.5 px-5">
                 <div class="flex items-center gap-2">
@@ -174,7 +174,7 @@ onMounted(applyFilters)
               <td class="py-2.5 px-5"><span class="badge" :class="statusBadge(t.status).cls">{{ statusBadge(t.status).label }}</span></td>
               <td class="py-2.5 px-5 text-ink-secondary text-xs">{{ t.created_at }}</td>
               <td class="py-2.5 px-5 text-right">
-                <router-link :to="`/process/tasks/${t.id}`" class="text-xs text-brand-700 hover:underline">查看</router-link>
+                <router-link :to="`/process/tasks/${t.task_id}`" class="text-xs text-brand-700 hover:underline">查看</router-link>
               </td>
             </tr>
           </tbody>
