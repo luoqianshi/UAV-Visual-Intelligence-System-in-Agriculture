@@ -1,13 +1,12 @@
-"""Task 13：Mock 只读 API 测试。
+"""Mock 只读 API 测试。
 
 因 app.py 仅注册 health_bp（本任务不允许修改 app.py），故在测试内部
-新建一个 Flask 应用并注册三个 mock blueprint，直接验证路由行为。
+新建一个 Flask 应用并注册 mock blueprint，直接验证路由行为。
 """
 import pytest
 from flask import Flask
 
 from api.batches_api import batches_bp
-from api.processing_api import processing_bp
 from api.datasets_api import datasets_bp
 
 
@@ -16,7 +15,6 @@ def client():
     def make_app():
         app = Flask(__name__)
         app.register_blueprint(batches_bp)
-        app.register_blueprint(processing_bp)
         app.register_blueprint(datasets_bp)
         return app
 
@@ -99,83 +97,6 @@ def test_batch_image_preview(client):
     assert resp.status_code == 200
     assert resp.mimetype == "image/jpeg"
     assert len(resp.data) > 0
-
-
-# ---------------------------------------------------------------------------
-# Processing tasks
-# ---------------------------------------------------------------------------
-def test_list_tasks_default(client):
-    resp = client.get("/api/processing/tasks")
-    assert resp.status_code == 200
-    body = resp.get_json()
-    assert body["data"]["total"] == 7
-    assert len(body["data"]["tasks"]) == 7
-
-
-def test_list_tasks_filter_type(client):
-    resp = client.get("/api/processing/tasks?type=clahe")
-    assert resp.status_code == 200
-    body = resp.get_json()
-    assert body["data"]["total"] == 4
-    assert all(t["type"] == "clahe" for t in body["data"]["tasks"])
-
-    resp = client.get("/api/processing/tasks?type=crop")
-    assert resp.get_json()["data"]["total"] == 3
-
-
-def test_list_tasks_filter_status_processing(client):
-    resp = client.get("/api/processing/tasks?status=processing")
-    assert resp.status_code == 200
-    body = resp.get_json()
-    assert body["data"]["total"] == 1
-    task = body["data"]["tasks"][0]
-    assert task["status"] == "processing"
-    assert task["progress"] == 72
-    assert task["name"] == "滑窗裁切 640/0.1"
-
-
-def test_list_tasks_status_distribution(client):
-    tasks = client.get("/api/processing/tasks").get_json()["data"]["tasks"]
-    from collections import Counter
-    dist = dict(Counter(t["status"] for t in tasks))
-    assert dist == {"completed": 5, "failed": 1, "processing": 1}
-
-
-def test_get_task_detail(client):
-    first_id = client.get(
-        "/api/processing/tasks"
-    ).get_json()["data"]["tasks"][0]["id"]
-    resp = client.get(f"/api/processing/tasks/{first_id}")
-    assert resp.status_code == 200
-    body = resp.get_json()
-    assert body["success"] is True
-    assert body["data"]["id"] == first_id
-    assert "params" in body["data"]
-
-
-def test_get_task_not_found(client):
-    resp = client.get("/api/processing/tasks/nope_xyz")
-    assert resp.status_code == 404
-    assert resp.get_json()["success"] is False
-
-
-def test_task_preview(client):
-    first_id = client.get(
-        "/api/processing/tasks"
-    ).get_json()["data"]["tasks"][0]["id"]
-    resp = client.get(f"/api/processing/tasks/{first_id}/preview")
-    assert resp.status_code == 200
-    assert resp.mimetype == "image/jpeg"
-    assert len(resp.data) > 0
-
-
-def test_task_preview_with_type_param(client):
-    first_id = client.get(
-        "/api/processing/tasks"
-    ).get_json()["data"]["tasks"][0]["id"]
-    resp = client.get(f"/api/processing/tasks/{first_id}/preview?type=original")
-    assert resp.status_code == 200
-    assert resp.mimetype == "image/jpeg"
 
 
 # ---------------------------------------------------------------------------

@@ -1,25 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { mockApi, type ProcessingTask, type Dataset } from '@/api/mock'
+import { mockApi, type Dataset } from '@/api/mock'
 
 export const useMockStore = defineStore('mock', () => {
-  const tasks = ref<ProcessingTask[]>([])
-  const taskTotal = ref(0)
   const datasets = ref<Dataset[]>([])
   const datasetTotal = ref(0)
   const formatDist = ref<Record<string, number>>({})
   const loading = ref(false)
-
-  async function fetchTasks(params?: { type?: string; status?: string }) {
-    loading.value = true
-    try {
-      const res = await mockApi.fetchTasks(params)
-      tasks.value = res.data.tasks
-      taskTotal.value = res.data.total
-    } finally {
-      loading.value = false
-    }
-  }
 
   async function fetchDatasets(params?: { format?: string }) {
     loading.value = true
@@ -34,7 +21,7 @@ export const useMockStore = defineStore('mock', () => {
   }
 
   return {
-    tasks, taskTotal, datasets, datasetTotal, formatDist, loading,
-    fetchTasks, fetchDatasets,
+    datasets, datasetTotal, formatDist, loading,
+    fetchDatasets,
   }
 })
