@@ -4,9 +4,9 @@ import Sidebar from './Sidebar.vue'
 </script>
 
 <template>
-  <div class="flex min-h-screen">
+  <div class="flex min-h-screen w-full items-start">
     <Sidebar />
-    <main class="flex-1 min-h-screen p-8 bg-surface-bg/30">
+    <main class="flex-1 min-h-screen p-8 bg-surface-bg/30 min-w-0">
       <slot />
     </main>
   </div>

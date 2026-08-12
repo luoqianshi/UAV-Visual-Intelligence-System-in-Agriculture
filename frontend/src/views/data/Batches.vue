@@ -31,10 +31,7 @@ const totalSizeGb = computed(() =>
   (summary.value.total_size_bytes / (1024 ** 3)).toFixed(2),
 )
 const resolutionLabel = computed(() => summary.value.resolutions[0] || '-')
-const primaryCrop = computed(() => {
-  if (batches.value.length === 0) return '-'
-  return [...new Set(batches.value.map((b) => b.crop_type))].join('、')
-})
+const formatsLabel = computed(() => summary.value.formats.join('、') || '-')
 
 function statusBadge(status: string): { cls: string; label: string } {
   const s = (status || '').toLowerCase()
@@ -116,42 +113,31 @@ function goDetail(b: Batch) {
 
     <DataSubTabs />
 
-    <!-- 原始飞行数据总览 -->
-    <div class="bg-white border border-surface-border rounded-card p-5 mb-6">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-btn bg-brand-50 flex items-center justify-center text-brand-700">
-            <Icon name="database" :size="16" />
-          </div>
-          <h2 class="text-sm font-semibold text-ink-primary">原始飞行数据总览</h2>
+    <!-- 原始飞行数据总览：4 张独立卡片（与加工数据一致） -->
+    <div class="grid grid-cols-4 gap-4 mb-6">
+      <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
+        <div class="text-xs text-ink-tertiary">架次数</div>
+        <div class="text-2xl font-semibold text-ink-primary mt-1 font-numeric">
+          {{ summary.total_batches }} <span class="text-sm text-ink-tertiary font-normal">个</span>
         </div>
       </div>
-      <div class="grid grid-cols-4 gap-4">
-        <div>
-          <div class="text-xs text-ink-tertiary">架次数</div>
-          <div class="text-2xl font-semibold text-ink-primary mt-1">
-            {{ summary.total_batches }} <span class="text-sm text-ink-tertiary font-normal">个</span>
-          </div>
+      <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
+        <div class="text-xs text-ink-tertiary">载入图片总数</div>
+        <div class="text-2xl font-semibold text-ink-primary mt-1 font-numeric">
+          {{ summary.total_images }} <span class="text-sm text-ink-tertiary font-normal">张</span>
         </div>
-        <div>
-          <div class="text-xs text-ink-tertiary">载入图片总数</div>
-          <div class="text-2xl font-semibold text-ink-primary mt-1">
-            {{ summary.total_images }} <span class="text-sm text-ink-tertiary font-normal">张</span>
-          </div>
+      </div>
+      <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
+        <div class="text-xs text-ink-tertiary">总大小</div>
+        <div class="text-2xl font-semibold text-ink-primary mt-1 font-numeric">
+          {{ totalSizeGb }} <span class="text-sm text-ink-tertiary font-normal">GB</span>
         </div>
-        <div>
-          <div class="text-xs text-ink-tertiary">作物类型</div>
-          <div class="text-2xl font-semibold text-ink-primary mt-1">{{ primaryCrop }}</div>
-        </div>
-        <div>
-          <div class="text-xs text-ink-tertiary">总大小 / 格式</div>
-          <div class="text-2xl font-semibold text-ink-primary mt-1">
-            {{ totalSizeGb }} <span class="text-sm text-ink-tertiary font-normal">GB</span>
-          </div>
-          <div class="text-xs text-ink-tertiary mt-0.5">
-            {{ summary.formats.join('、') || '-' }} · {{ resolutionLabel }}
-          </div>
-        </div>
+        <div class="text-xs text-ink-tertiary mt-1">MIPI · {{ formatsLabel }}</div>
+      </div>
+      <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
+        <div class="text-xs text-ink-tertiary">主要分辨率</div>
+        <div class="text-2xl font-semibold text-ink-primary mt-1 font-numeric">{{ resolutionLabel }}</div>
+        <div class="text-xs text-ink-tertiary mt-1">{{ formatsLabel }}</div>
       </div>
     </div>
 

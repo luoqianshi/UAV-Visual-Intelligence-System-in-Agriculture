@@ -7,7 +7,7 @@ import type { ProcessingTask } from '@/api/processing'
 
 // 按方法分组（CLAHE 增强 / 滑窗裁切）的任务表格
 const store = useProcessingStore()
-const filterType = ref('') // '' | 'clahe' | 'crop'
+const tab = ref<'clahe' | 'crop'>('clahe') // 顶部子标签切换
 const filterStatus = ref('') // '' | 'processing' | 'completed' | 'failed'
 const errorMsg = ref('')
 
@@ -43,14 +43,24 @@ function groupStats(type: string) {
 }
 
 const visibleGroups = computed(() =>
-  groups.filter((g) => !filterType.value || g.type === filterType.value),
+  groups.filter((g) => g.type === tab.value),
 )
+
+const tabDesc = computed(() =>
+  groups.find((g) => g.type === tab.value)?.desc || '',
+)
+
+function switchTab(t: 'clahe' | 'crop') {
+  if (tab.value === t) return
+  tab.value = t
+  applyFilters()
+}
 
 async function applyFilters() {
   errorMsg.value = ''
   try {
+    // 一次性拉取全部任务，tab 切换走客户端过滤（保持"累计 N 次执行"为全量）
     await store.fetchTasks({
-      type: filterType.value || undefined,
       status: filterStatus.value || undefined,
     })
   } catch (e: any) {
@@ -68,7 +78,7 @@ onMounted(applyFilters)
       <div>
         <div class="text-xs text-ink-tertiary mb-1">数据处理</div>
         <h1 class="text-2xl font-semibold text-ink-primary">处理方法</h1>
-        <p class="text-sm text-ink-secondary mt-1">按类型查看已执行任务 · 共 2 种方法 · 累计 {{ store.taskTotal }} 次执行</p>
+        <p class="text-sm text-ink-secondary mt-1">{{ tabDesc }} · 累计 {{ store.taskTotal }} 次执行</p>
       </div>
       <router-link
         to="/process/task-new"
@@ -78,15 +88,20 @@ onMounted(applyFilters)
       </router-link>
     </div>
 
-    <!-- 筛选栏 -->
+    <!-- 顶部子标签栏：与算法广场 / 数据管理一致 -->
+    <div class="flex items-center gap-1 border-b border-surface-border mb-6">
+      <button class="sub-tab" :class="{ active: tab === 'clahe' }" @click="switchTab('clahe')">
+        <Icon name="sparkle" :size="14" />CLAHE 增强
+      </button>
+      <button class="sub-tab" :class="{ active: tab === 'crop' }" @click="switchTab('crop')">
+        <Icon name="grid" :size="14" />滑窗裁切
+      </button>
+    </div>
+
+    <!-- 状态筛选 -->
     <div class="bg-white border border-surface-border rounded-card p-4 mb-4">
       <div class="flex items-center gap-3">
         <span class="text-xs text-ink-tertiary">筛选：</span>
-        <select v-model="filterType" @change="applyFilters" class="px-3 py-2 bg-white border border-surface-border rounded-btn text-sm text-ink-secondary">
-          <option value="">全部类型</option>
-          <option value="clahe">CLAHE 增强</option>
-          <option value="crop">滑窗裁切</option>
-        </select>
         <select v-model="filterStatus" @change="applyFilters" class="px-3 py-2 bg-white border border-surface-border rounded-btn text-sm text-ink-secondary">
           <option value="">全部状态</option>
           <option value="processing">进行中</option>

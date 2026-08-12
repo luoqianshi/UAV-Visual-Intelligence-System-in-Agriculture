@@ -222,14 +222,14 @@ onMounted(() => {
     </div>
 
     <!-- 快速入口（左） + 最近活动（右） -->
-    <div class="grid grid-cols-3 gap-5">
-      <div class="col-span-2 space-y-5">
-        <div class="bg-white border border-surface-border rounded-card p-5">
+    <div class="grid grid-cols-3 gap-5 items-stretch">
+      <div class="col-span-2 space-y-5 h-full flex flex-col">
+        <div class="bg-white border border-surface-border rounded-card p-5 h-full flex flex-col">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-semibold text-ink-primary">快速入口</h2>
             <span class="text-xs text-ink-tertiary">常用操作直达</span>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-2 gap-3 flex-1 content-start">
             <router-link
               to="/data/batch-new"
               class="border border-surface-border rounded-card p-4 hover:border-brand-300 hover:bg-brand-50/30 transition flex items-start gap-3"
@@ -304,10 +304,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="space-y-5">
-        <div class="bg-white border border-surface-border rounded-card p-5">
+      <div class="space-y-5 h-full flex flex-col">
+        <div class="bg-white border border-surface-border rounded-card p-5 h-full flex flex-col">
           <h2 class="text-sm font-semibold text-ink-primary mb-4">最近活动</h2>
-          <div v-if="activities.length" class="space-y-2 text-xs">
+          <div v-if="activities.length" class="space-y-2 text-xs flex-1">
             <router-link
               v-for="(item, idx) in activities"
               :key="idx"
@@ -319,7 +319,7 @@ onMounted(() => {
               <span class="text-ink-tertiary">{{ item.time }}</span>
             </router-link>
           </div>
-          <div v-else class="text-xs text-ink-tertiary text-center py-8 flex items-center justify-center gap-1.5">
+          <div v-else class="text-xs text-ink-tertiary text-center py-8 flex items-center justify-center gap-1.5 flex-1">
             <Icon name="bell" :size="14" /> 暂无最近活动
           </div>
         </div>
