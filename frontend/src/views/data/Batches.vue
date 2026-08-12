@@ -1,5 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import AppLayout from '@/components/layout/AppLayout.vue'
+import DataSubTabs from '@/components/layout/DataSubTabs.vue'
 import Icon from '@/components/common/Icon.vue'
 import { batchesApi, type Batch } from '@/api/batches'
 import { useRouter } from 'vue-router'
@@ -112,6 +113,8 @@ function goDetail(b: Batch) {
         <Icon name="plus" :size="14" /> 新建架次
       </router-link>
     </div>
+
+    <DataSubTabs />
 
     <!-- 原始飞行数据总览 -->
     <div class="bg-white border border-surface-border rounded-card p-5 mb-6">

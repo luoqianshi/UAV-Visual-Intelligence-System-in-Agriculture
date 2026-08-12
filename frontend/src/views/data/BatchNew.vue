@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/components/layout/AppLayout.vue'
+import DataSubTabs from '@/components/layout/DataSubTabs.vue'
 import Icon from '@/components/common/Icon.vue'
 import { batchesApi } from '@/api/batches'
 import { ref, computed, onMounted, watch } from 'vue'
@@ -170,6 +171,8 @@ function formatBytes(bytes: number): string {
     </div>
     <h1 class="text-2xl font-semibold text-ink-primary mb-1">注册新架次</h1>
     <p class="text-sm text-ink-secondary mb-6">登记 UAV 采集架次元数据与本机图片文件夹路径，建立标准化的架次记录</p>
+
+    <DataSubTabs />
 
     <!-- 成功提示 -->
     <div

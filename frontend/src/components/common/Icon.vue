@@ -82,8 +82,13 @@ const icons: Record<string, string> = {
   // 导航箭头
   'chevron-right': '<path d="M9 6 L15 12 L9 18"/>',
   'chevron-left': '<path d="M15 6 L9 12 L15 18"/>',
+  'chevron-down': '<path d="M6 9 L12 15 L18 9"/>',
   'arrow-left': '<path d="M19 12 H5"/><path d="M12 5 L5 12 L12 19"/>',
   'arrow-right': '<path d="M5 12 H19"/><path d="M12 5 L19 12 L12 19"/>',
+
+  // 文件与删除
+  folder: '<path d="M4 7 A2 2 0 0 1 6 5 H10 L12 7 H18 A2 2 0 0 1 20 9 V17 A2 2 0 0 1 18 19 H6 A2 2 0 0 1 4 17 V7 Z"/>',
+  trash: '<path d="M5 7 H19"/><path d="M9 7 V5 A1 1 0 0 1 10 4 H14 A1 1 0 0 1 15 5 V7"/><path d="M7 7 L8 20 A1 1 0 0 0 9 21 H15 A1 1 0 0 0 16 20 L17 7"/><path d="M10 10 V18"/><path d="M14 10 V18"/>',
 
   // 状态
   check: '<path d="M5 12 L10 17 L19 7"/>',

@@ -8,6 +8,8 @@ const routes = [
   { path: '/data/batches', name: 'batches', component: () => import('@/views/data/Batches.vue') },
   { path: '/data/batches/:id', name: 'batch-detail', component: () => import('@/views/data/BatchDetail.vue') },
   { path: '/data/batch-new', name: 'batch-new', component: () => import('@/views/data/BatchNew.vue') },
+  { path: '/data/processed', name: 'processed', component: () => import('@/views/data/Processed.vue') },
+  { path: '/data/processed/:id', name: 'processed-detail', component: () => import('@/views/data/ProcessedDetail.vue') },
 
   // 数据处理
   { path: '/process/tasks', name: 'tasks', component: () => import('@/views/process/Tasks.vue') },

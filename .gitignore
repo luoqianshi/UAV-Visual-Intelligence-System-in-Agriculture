@@ -40,4 +40,4 @@ Thumbs.db
 .backend_stdout.log
 
 # 本地数据
-data/
+/data/

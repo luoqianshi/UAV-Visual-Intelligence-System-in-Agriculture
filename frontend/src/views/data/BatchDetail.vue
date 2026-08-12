@@ -169,6 +169,8 @@ onMounted(load)
       <span class="text-ink-primary">{{ batch?.batch_name || id }}</span>
     </div>
 
+    <DataSubTabs />
+
     <!-- 加载中 -->
     <div v-if="loading" class="py-24 text-center text-ink-tertiary">
       <i class="fa-solid fa-circle-notch fa-spin text-2xl"></i>
