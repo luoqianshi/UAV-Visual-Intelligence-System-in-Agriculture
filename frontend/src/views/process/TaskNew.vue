@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { batchesApi, type Batch } from '@/api/batches'
+import { processingApi } from '@/api/processing'
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // 1:1 迁移 process/task-new.html：4 步引导式向导（类型 → 输入源 → 参数 → 确认）
 const batches = ref<Batch[]>([])
@@ -89,11 +93,29 @@ async function submit() {
   successMsg.value = ''
   errorMsg.value = ''
   try {
-    // V1 演示模式：不持久化
-    await new Promise((r) => setTimeout(r, 300))
-    successMsg.value = '处理任务已创建（V1 演示模式）· 数据未持久化'
+    const input_paths = inputMode.value === 'batch'
+      ? selectedBatches.value.map(b => b.image_folder_path)
+      : [customDir.value]
+    let taskId: string
+    if (selectedType.value === 'clahe') {
+      const res = await processingApi.submitClahe({
+        name: form.value.name,
+        input_paths,
+        params: { clip_limit: form.value.clip_limit, grid_size: form.value.grid },
+      })
+      taskId = res.data.task_id
+    } else {
+      const res = await processingApi.submitCrop({
+        name: form.value.name,
+        input_paths,
+        params: { tile_size: form.value.tile_size, overlap_ratio: form.value.overlap_ratio },
+      })
+      taskId = res.data.task_id
+    }
+    // 提交成功后跳转到任务详情
+    router.push(`/process/tasks/${taskId}`)
   } catch (e: any) {
-    errorMsg.value = e.message || '提交失败'
+    errorMsg.value = e.response?.data?.message || e.message || '提交失败'
   } finally {
     submitting.value = false
   }
@@ -290,10 +312,6 @@ onMounted(async () => {
             <div v-if="selectedType === 'clahe'" class="flex justify-between"><span class="text-ink-tertiary">clipLimit / 网格</span><span class="text-ink-primary">{{ form.clip_limit }} / {{ form.grid }}</span></div>
             <div v-else class="flex justify-between"><span class="text-ink-tertiary">tile / overlap</span><span class="text-ink-primary">{{ form.tile_size }} / {{ form.overlap_ratio }}</span></div>
             <div class="flex justify-between"><span class="text-ink-tertiary">输出目录</span><span class="text-ink-primary font-mono text-xs">{{ form.output_path }}</span></div>
-          </div>
-          <div class="mt-4 bg-brand-50/50 border border-brand-100 rounded-btn p-3 text-xs text-ink-secondary flex items-start gap-2">
-            <i class="fa-solid fa-circle-info text-brand-700 mt-0.5"></i>
-            <span>V1 演示模式：提交后仅展示成功提示，不会真正执行处理或持久化任务记录。</span>
           </div>
         </div>
       </div>
