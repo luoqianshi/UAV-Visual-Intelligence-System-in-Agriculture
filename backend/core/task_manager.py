@@ -8,8 +8,8 @@ class TaskManager:
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._tasks: dict = {}
 
-    def submit(self, task_type: str, func, *args, **kwargs) -> str:
-        task_id = f"{task_type}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    def submit(self, task_type: str, func, *args, task_id: str = None, **kwargs) -> str:
+        task_id = task_id or f"{task_type}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
         self._tasks[task_id] = {"task_id": task_id, "task_type": task_type, "status": "pending",
             "progress": 0.0, "result": None, "error": None,
             "created_at": datetime.now(timezone.utc).isoformat(), "completed_at": None}

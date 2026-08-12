@@ -101,3 +101,30 @@ def test_get_nonexistent_task():
     tm = TaskManager()
     t = tm.get("does_not_exist")
     assert "error" in t
+
+
+def test_submit_with_custom_task_id():
+    """submit 支持自定义 task_id 参数。"""
+    tm = TaskManager(max_workers=1)
+    custom_id = "clahe_20260812_153000_456"
+
+    def _dummy(task_id):
+        return {"task_id": task_id}
+
+    returned_id = tm.submit("processing", _dummy, task_id=custom_id)
+    assert returned_id == custom_id
+    # 等待任务完成
+    import time
+    time.sleep(0.2)
+    task = tm.get(custom_id)
+    assert task["task_id"] == custom_id
+    assert task["status"] == "completed"
+    assert task["result"] == {"task_id": custom_id}
+
+
+def test_submit_without_task_id_backward_compatible():
+    """不传 task_id 时仍按原逻辑生成。"""
+    tm = TaskManager(max_workers=1)
+    returned_id = tm.submit("test", lambda tid: None)
+    assert returned_id.startswith("test_")
+    assert tm.get(returned_id) is not None

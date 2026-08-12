@@ -33,3 +33,8 @@ LRU_CACHE_SIZE = 3    # 引擎实例缓存上限
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── 数据处理（模块二）─────────────────────────────────────────────
+OUTPUT_DIR = PROJECT_ROOT / "output"
+PROCESSING_TASKS_YAML = DATA_DIR / "processing_tasks.yaml"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
