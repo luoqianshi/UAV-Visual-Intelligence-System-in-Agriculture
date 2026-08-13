@@ -21,7 +21,7 @@ def build_mini_coco(root: Path):
             ("img_t2.jpg", 640, 640, [[5, 5, 20, 20]]),
         ],
         "val": [("img_v1.jpg", 640, 640, [[300, 300, 40, 40]])],
-        "test": [("img_e1.jpg", 640, 640, [[400, 400, 100, 100]])],
+        "test": [("img_e1.jpg", 640, 640, [[400, 400, 62.5, 62.5]])],
     }
     root.mkdir(parents=True, exist_ok=True)
     (root / "annotations").mkdir(exist_ok=True)
