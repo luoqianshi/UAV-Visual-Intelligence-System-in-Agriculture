@@ -38,3 +38,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR = PROJECT_ROOT / "output"
 PROCESSING_TASKS_YAML = DATA_DIR / "processing_tasks.yaml"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── 数据集管理（模块三）─────────────────────────────────────────────
+DATASETS_DIR = PROJECT_ROOT / "datasets"
+DATASETS_YAML = DATASETS_DIR / "datasets.yaml"
+DATASETS_DIR.mkdir(parents=True, exist_ok=True)
