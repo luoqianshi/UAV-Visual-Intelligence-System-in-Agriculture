@@ -112,46 +112,58 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
   >
     <!-- 顶部 Logo + 折叠按钮 -->
     <div
-      class="px-4 py-3.5 border-b border-surface-border flex items-center gap-2"
-      :class="{ 'justify-center px-2': collapsed }"
+      class="border-b border-surface-border flex items-center"
+      :class="collapsed ? 'justify-center py-2.5' : 'px-4 py-3.5 gap-2'"
     >
-      <div v-if="!collapsed" class="flex items-center gap-2.5 min-w-0 flex-1">
-        <img src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8 flex-shrink-0" />
-        <div class="min-w-0">
-          <div class="font-semibold text-ink-primary text-base tracking-tight truncate">田间智瞰</div>
-          <div class="text-xs text-ink-tertiary truncate">UAV智能农业监管系统</div>
+      <template v-if="!collapsed">
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <img src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8 flex-shrink-0" />
+          <div class="min-w-0">
+            <div class="font-semibold text-ink-primary text-base tracking-tight truncate">田间智瞰</div>
+            <div class="text-xs text-ink-tertiary truncate">UAV智能农业监管系统</div>
+          </div>
         </div>
-      </div>
-      <img v-else src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8 flex-shrink-0" />
+        <button
+          @click="toggleCollapsed"
+          class="flex-shrink-0 p-1.5 rounded-btn text-ink-tertiary hover:text-ink-primary hover:bg-surface-hover transition-colors"
+          title="收起侧边栏"
+        >
+          <Icon name="chevron-left" :size="16" />
+        </button>
+      </template>
       <button
+        v-else
         @click="toggleCollapsed"
-        class="flex-shrink-0 p-1.5 rounded-btn text-ink-tertiary hover:text-ink-primary hover:bg-surface-hover transition-colors"
-        :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
+        class="p-1 rounded-btn hover:bg-surface-hover transition-colors"
+        title="展开侧边栏"
       >
-        <Icon :name="collapsed ? 'chevron-right' : 'chevron-left'" :size="16" />
+        <img src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8" />
       </button>
     </div>
 
     <!-- 导航 -->
-    <nav class="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden">
+    <nav
+      class="flex-1 py-3 overflow-y-auto overflow-x-hidden"
+      :class="collapsed ? 'px-2 space-y-1.5' : 'px-3 space-y-0.5'"
+    >
       <router-link
         v-for="item in navItems"
         :key="item.section"
         :to="item.to"
         class="nav-item"
-        :class="{ active: isActive(item.section) }"
+        :class="{ active: isActive(item.section), 'nav-item--icon-only': collapsed }"
         :title="collapsed ? item.label : ''"
       >
-        <Icon :name="item.icon" :size="18" class="flex-shrink-0" />
+        <Icon :name="item.icon" :size="collapsed ? 20 : 18" class="flex-shrink-0" />
         <span v-if="!collapsed" class="truncate">{{ item.label }}</span>
       </router-link>
     </nav>
 
     <!-- 底部：用户区 -->
-    <div class="px-3 py-3 border-t border-surface-border flex-shrink-0">
+    <div class="py-3 border-t border-surface-border flex-shrink-0" :class="collapsed ? 'px-2' : 'px-3'">
       <div
         class="flex items-center gap-2.5 px-2 py-2 rounded-btn hover:bg-surface-hover cursor-pointer transition-colors"
-        :class="{ 'justify-center px-0': collapsed }"
+        :class="{ 'justify-center px-0 py-0': collapsed }"
         :title="collapsed ? '研究员 · 甘蔗组' : ''"
       >
         <div
@@ -176,6 +188,18 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
 </template>
 
 <style scoped>
+/* 折叠态：导航项变为居中的方形图标块，视觉更舒展 */
+.nav-item--icon-only {
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 10px;
+}
+.nav-item--icon-only.active::before {
+  display: none;
+}
 .sidebar {
   position: relative;
   transition: width 0.2s ease-out;
