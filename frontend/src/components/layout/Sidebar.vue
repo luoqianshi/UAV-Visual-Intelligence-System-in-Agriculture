@@ -106,7 +106,7 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
 
 <template>
   <aside
-    class="h-screen bg-white border-r border-surface-border flex flex-col sticky top-0 self-start flex-shrink-0 sidebar overflow-hidden"
+    class="h-screen bg-white border-r border-surface-border flex flex-col flex-shrink-0 sidebar overflow-hidden"
     :class="{ 'sidebar--collapsed': collapsed }"
     :style="{ width: currentWidth + 'px' }"
   >
@@ -178,12 +178,8 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
 <style scoped>
 .sidebar {
   position: relative;
-  align-self: flex-start;
   transition: width 0.2s ease-out;
   overflow: hidden;
-}
-.sidebar--collapsed {
-  transition: width 0.2s ease-out;
 }
 .sidebar-resize-handle {
   position: absolute;
