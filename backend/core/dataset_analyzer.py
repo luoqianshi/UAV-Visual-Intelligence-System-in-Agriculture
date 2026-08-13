@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from config import PROJECT_ROOT
-from dataset_formats import detect_format, parse_coco, parse_voc, parse_yolo
+from core.dataset_formats import detect_format, parse_coco, parse_voc, parse_yolo
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ from PIL import Image
 
 from config import DATASETS_DIR, DATASETS_YAML, IMAGE_EXTENSIONS, PROJECT_ROOT, \
     PREVIEW_MEDIUM_SIZE, THUMBNAIL_MAX_SIZE
-from dataset_formats import detect_format
+from core.dataset_formats import detect_format
 
 _DATASET_FIELD_ORDER = [
     "dataset_id", "name", "format", "source", "path", "classes",
