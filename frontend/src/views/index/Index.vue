@@ -2,13 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/common/Icon.vue'
-import { useMockStore } from '@/stores/mock'
+import { useDatasetsStore } from '@/stores/datasets'
 import { useProcessingStore } from '@/stores/processing'
 import { useCountingStore } from '@/stores/counting'
 import { useModelStore } from '@/stores/model'
 import { batchesApi } from '@/api/batches'
 
-const mockStore = useMockStore()
+const datasetsStore = useDatasetsStore()
 const processingStore = useProcessingStore()
 const countingStore = useCountingStore()
 const modelStore = useModelStore()
@@ -21,7 +21,7 @@ const processingCount = computed(
   () => processingStore.tasks.filter((t) => t.status === 'processing').length,
 )
 const totalSamples = computed(() =>
-  mockStore.datasets.reduce((s, d) => s + (d.sample_count || 0), 0),
+  datasetsStore.datasets.reduce((s, d) => s + (d.sample_count || 0), 0),
 )
 const activeModelDisplay = computed(() => {
   const m = modelStore.models.find((m) => m.name === modelStore.currentModel)
@@ -116,7 +116,7 @@ onMounted(() => {
       batchTotalImages.value = res.data.summary.total_images
     }).catch(() => {}),
     processingStore.fetchTasks(),
-    mockStore.fetchDatasets(),
+    datasetsStore.fetchDatasets(),
     modelStore.fetchModels(),
     countingStore.fetchHistory().catch(() => []),
   ])
@@ -191,7 +191,7 @@ onMounted(() => {
           <div class="text-sm font-semibold text-ink-primary">数据集管理</div>
           <div class="text-xs text-ink-tertiary mt-1">消费外部标注，拆分构建与多格式导出</div>
           <div class="text-xs text-brand-700 mt-2 font-medium">
-            {{ mockStore.datasetTotal }} 个数据集 · {{ totalSamples.toLocaleString() }} 样本
+            {{ datasetsStore.total }} 个数据集 · {{ totalSamples.toLocaleString() }} 样本
           </div>
         </router-link>
 
