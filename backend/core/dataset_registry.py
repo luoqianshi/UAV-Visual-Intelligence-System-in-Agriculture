@@ -203,18 +203,128 @@ class DatasetRegistry:
         except ValueError:
             return str(abs_path).replace("\\", "/")
 
-    # 以下方法在 Task 7 实现
+    # ── 路径预检 ───────────────────────────────────────────
     def scan_path(self, path: str) -> dict:
-        raise NotImplementedError
+        if self._analyzer is None:
+            raise RuntimeError("analyzer 未注入")
+        return self._analyzer.scan(path)
 
+    # ── 导入注册 ───────────────────────────────────────────
     def import_dataset(self, path: str, name=None, description=None) -> dict:
-        raise NotImplementedError
+        if self._analyzer is None:
+            raise RuntimeError("analyzer 未注入")
+        folder = self._resolve_path(path)
+        if not folder.exists() or not folder.is_dir():
+            raise ValueError(f"路径不存在或非目录: {path}")
+        summary = self._analyzer.scan(path)
+        if not summary["valid"]:
+            raise ValueError(summary["message"])
+        fmt = summary["format"]
+        inferred_name = _infer_name(folder.name, fmt)
+        name = name or inferred_name
+        # 重名校验
+        for d in self._datasets.values():
+            if d["name"] == name:
+                raise ValueError(f"数据集名称已存在: {name}")
+            if self._resolve_path(d["path"]).resolve() == folder.resolve():
+                raise ValueError(f"该路径已注册为数据集 {d['dataset_id']}")
+        dataset_id = "dataset_" + _sanitize(folder.name).lower()
+        dataset_id = self._ensure_unique_id(dataset_id)
+        rel_path = self._to_relative(folder)
+        cfg = self._build_cfg(dataset_id, name, fmt, "imported", rel_path, summary)
+        if description:
+            cfg["description"] = description
+        self._datasets[dataset_id] = cfg
+        # 写 dataset_meta.json
+        self._analyzer._write_meta(folder / "dataset_meta.json",
+                                   self._meta_from_cfg(cfg, folder))
+        self.save_to_yaml()
+        return cfg
 
+    # ── 删除 ───────────────────────────────────────────────
     def delete_dataset(self, dataset_id: str, delete_files: bool = False):
-        raise NotImplementedError
+        if dataset_id not in self._datasets:
+            raise KeyError(f"数据集不存在: {dataset_id}")
+        cfg = self._datasets[dataset_id]
+        folder = self._resolve_path(cfg["path"])
+        if delete_files and folder.is_dir():
+            shutil.rmtree(folder, ignore_errors=True)
+        else:
+            meta = folder / "dataset_meta.json"
+            if meta.exists():
+                meta.unlink()
+        # datasets/ 下的自动发现数据集加入 ignored_folders
+        try:
+            folder.resolve().relative_to(self._datasets_dir.resolve())
+            self._ignored_folders.add(folder.name)
+        except ValueError:
+            pass
+        del self._datasets[dataset_id]
+        self.save_to_yaml()
 
-    def list_images(self, dataset_id, split, page, page_size) -> dict:
-        raise NotImplementedError
+    # ── 样本浏览 ───────────────────────────────────────────
+    def _image_dir_for_split(self, cfg: dict, split: str) -> Path:
+        folder = self._resolve_path(cfg["path"])
+        fmt = cfg["format"]
+        if fmt == "COCO":
+            direct = folder / split
+            if direct.is_dir() and any(f.suffix.lower() in IMAGE_EXTENSIONS
+                                        for f in direct.iterdir() if f.is_file()):
+                return direct
+            return folder / "images" / split
+        if fmt == "YOLO":
+            return folder / "images" / split
+        # VOC
+        return folder / split / "images"
 
-    def get_image_preview(self, dataset_id, filename, split, size) -> bytes:
-        raise NotImplementedError
+    def list_images(self, dataset_id: str, split: str = "train",
+                    page: int = 1, page_size: int = 50) -> dict:
+        cfg = self.get_dataset(dataset_id)
+        img_dir = self._image_dir_for_split(cfg, split)
+        images = []
+        if img_dir.is_dir():
+            for entry in sorted(img_dir.iterdir()):
+                if not entry.is_file() or entry.suffix.lower() not in IMAGE_EXTENSIONS:
+                    continue
+                try:
+                    stat = entry.stat()
+                    with Image.open(entry) as im:
+                        w, h = im.size
+                        fmt = im.format or entry.suffix.lstrip('.').upper()
+                except Exception:
+                    continue
+                images.append({"filename": entry.name, "split": split,
+                               "size_bytes": stat.st_size, "width": w, "height": h,
+                               "format": fmt})
+        total = len(images)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * page_size
+        paged = images[start:start + page_size]
+        for im in paged:
+            fn = im["filename"]
+            im["thumbnail_url"] = (
+                f"/api/datasets/{dataset_id}/images/{fn}/preview?split={split}&size=thumbnail")
+            im["preview_url"] = (
+                f"/api/datasets/{dataset_id}/images/{fn}/preview?split={split}&size=medium")
+        return {"images": paged, "total": total, "page": page,
+                "page_size": page_size, "total_pages": total_pages, "split": split}
+
+    def get_image_preview(self, dataset_id: str, filename: str,
+                          split: str = "train", size: str = "thumbnail") -> bytes:
+        cfg = self.get_dataset(dataset_id)
+        img_dir = self._image_dir_for_split(cfg, split)
+        image_path = img_dir / filename
+        if not image_path.is_file():
+            raise FileNotFoundError(f"图片不存在: {filename}")
+        if size == "original":
+            with open(image_path, "rb") as f:
+                return f.read()
+        max_size = THUMBNAIL_MAX_SIZE if size == "thumbnail" else PREVIEW_MEDIUM_SIZE
+        quality = 80 if size == "thumbnail" else 85
+        with Image.open(image_path) as im:
+            im = im.convert("RGB") if im.mode not in ("RGB", "L") else im
+            im.thumbnail((max_size, max_size), Image.LANCZOS)
+            buf = io.BytesIO()
+            im.save(buf, format="JPEG", quality=quality, optimize=True)
+            return buf.getvalue()
