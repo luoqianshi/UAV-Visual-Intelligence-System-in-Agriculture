@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  低空智瞰（UAV 智能监测管理系统）一键启动脚本
+  田间智瞰（UAV 智能监测管理系统）一键启动脚本
 .DESCRIPTION
   1. 检查 Python / Node 环境
   2. 安装后端依赖（如未安装）

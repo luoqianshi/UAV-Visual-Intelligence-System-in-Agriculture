@@ -78,7 +78,7 @@ def create_app() -> Flask:
         if index.is_file():
             return send_from_directory(str(STATIC_DIR), "index.html")
         # 静态资源尚未构建
-        return {"success": True, "data": {"service": "低空智瞰 UAV 智能监测系统"},
+        return {"success": True, "data": {"service": "田间智瞰 UAV 智能监测系统"},
                 "message": "前端尚未构建，请先 cd frontend && npm install && npm run build"}, 200
 
     return app

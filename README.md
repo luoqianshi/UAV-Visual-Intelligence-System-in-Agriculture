@@ -1,6 +1,8 @@
-# 低空智瞰 · 基于无人机图像的大田农作物智能监测与管理系统
+# 田间智瞰 · 基于无人机图像的大田农作物智能监测与管理系统
 
-基于无人机（UAV）图像的大田农作物智能监测平台，覆盖 **数据管理 → 数据处理 → 数据集管理 → 算法广场** 四模块闭环。V1 阶段以**算法广场**（模型注册/热切换/单图检测/作物计数）为真实实现主线，数据管理/处理/数据集三模块以 mock 端点填充界面。
+基于无人机（UAV）图像的大田农作物智能监测平台，覆盖 **数据管理 → 数据处理 → 数据集管理 → 算法广场** 四模块闭环。
+
+**当前研发阶段：V3**。数据管理（架次注册/图片浏览）、数据处理（CLAHE 增强/滑窗裁切/加工数据）与算法广场（模型注册/热切换/单图检测/作物计数）均已真实实现，仅剩 **数据集管理** 以 mock 端点填充界面。
 
 ## 目录结构
 
@@ -8,38 +10,48 @@
 project_root/
 ├── backend/                    # Flask 后端
 │   ├── app.py                  # 应用入口（注册 Blueprint、托管静态资源、SPA 兜底）
-│   ├── config.py               # 路径/端口/并发配置
+│   ├── config.py               # 路径/端口/并发/数据管理/数据处理常量
 │   ├── api/                    # 路由 Blueprint
 │   │   ├── health_api.py       # GET /api/health（真实）
 │   │   ├── models_api.py       # /api/models, /switch, /load（真实）
 │   │   ├── detect_api.py       # /api/detect 单图同步+批量异步（真实）
 │   │   ├── counting_api.py     # /api/counting 异步+轮询+历史（真实）
-│   │   ├── batches_api.py      # /api/batches/*（V1 mock）
-│   │   ├── processing_api.py   # /api/processing/*（V1 mock）
-│   │   └── datasets_api.py     # /api/datasets/*（V1 mock）
+│   │   ├── batches_api.py      # /api/batches/*（真实：架次 CRUD/图片/预览/扫描）
+│   │   ├── processing_api.py   # /api/processing/*（真实：CLAHE/裁切任务+加工数据）
+│   │   └── datasets_api.py     # /api/datasets/*（V4 mock）
 │   ├── core/                   # 核心引擎
 │   │   ├── registry.py         # 模型注册中心（YAML+LRU+热切换+动态注册）
+│   │   ├── batch_registry.py   # 架次注册中心（YAML+自动扫描+图片索引+缩略图）
+│   │   ├── processing_engine.py    # 处理执行引擎（批量 CLAHE/裁切）
+│   │   ├── processing_registry.py  # 处理任务持久化（YAML + output/ 自扫描）
 │   │   ├── detector.py         # 检测引擎（原子化单图 YOLO 推理）
 │   │   ├── counter.py          # 计数引擎（CLAHE→分块→检测→NMS→计数编排）
-│   │   ├── clahe.py / tiling.py / nms.py   # 共享工具
+│   │   ├── clahe.py / tiling.py / nms.py   # 共享算法工具
 │   │   ├── task_manager.py     # 异步任务管理（ThreadPoolExecutor, 并发=1）
-│   │   ├── engine.py           # 引擎单例容器
+│   │   ├── engine.py           # 引擎单例容器（registry/batch/processing/detector/counter）
 │   │   └── result_store.py     # 计数结果持久化
-│   ├── mock/                   # mock 数据 JSON（batches/tasks/datasets）
-│   ├── tests/                  # 核心引擎 + API TDD 测试（72 项）
+│   ├── mock/                   # mock 数据 JSON（datasets.json；batches.json 已被真实 API 取代保留未删）
+│   ├── tests/                  # 核心引擎 + API TDD 测试（103 项，14 个文件）
 │   └── static/                 # Vue 构建产物（gitignore，由前端构建生成）
 ├── frontend/                   # Vue 3 前端
 │   ├── vite.config.ts          # Vite + /api 代理 + build→backend/static
-│   ├── tailwind.config.js      # V0.4 色板（brand/ink/surface）
+│   ├── tailwind.config.js      # 色板（brand/ink/surface，Emerald #10B981）
 │   └── src/
-│       ├── router/             # 15 条路由
-│       ├── api/                # axios 模块（models/detect/counting/mock）
-│       ├── stores/             # Pinia（model/detect/counting/mock）
-│       ├── components/layout/  # AppLayout / Sidebar / SubTabs
+│       ├── router/             # 17 条路由
+│       ├── api/                # axios 模块（models/detect/counting/batches/processing/mock）
+│       ├── stores/             # Pinia（model/detect/counting/processing/mock）
+│       ├── components/layout/  # AppLayout / Sidebar / SubTabs / DataSubTabs
 │       ├── components/algo/    # DetectionViewer / HeatmapChart / ConfidenceDistChart
+│       ├── components/common/  # Icon / ImageViewer
 │       └── views/              # index / algo / data / process / dataset
 ├── config/models.yaml          # 模型注册配置（6 个甘蔗模型）
 ├── models/                     # YOLO 权重放置目录（需手动放入）
+├── data/                       # 数据管理 + 处理任务持久化
+│   ├── batches.yaml            # 架次登记（启动自动扫描生成）
+│   ├── processing_tasks.yaml   # 处理任务记录
+│   └── sugarcane_20250419_{5m,8m,10m}/   # 原始架次图片
+├── output/                     # 数据处理产物（output/{task_id}/）
+├── docs/superpowers/           # 设计文档（plans + specs，V2 数据管理 / V3 数据处理）
 ├── results/                    # 计数结果输出
 ├── requirements.txt
 ├── start.ps1                   # 一键启动脚本
@@ -56,7 +68,7 @@ project_root/
 | PyTorch | ≥2.1.0 | `pip install torch`（含 CUDA） |
 | Ultralytics | ≥8.4.60 | `pip install ultralytics` |
 
-> **说明**：未安装 torch/ultralytics 时，系统仍可启动，模型管理/列表/mock 页面正常，但检测与计数推理不可用（API 返回降级提示）。
+> **说明**：未安装 torch/ultralytics 时，系统仍可启动，模型管理/列表、数据管理、mock 页面正常；检测/计数推理不可用（API 返回降级提示）。数据处理依赖 cv2/numpy，缺失时处理 API 返回 503 而非 500。
 
 ## 模型权重放置
 
@@ -124,12 +136,12 @@ npm run build                  # 产物输出到 backend/static/
 
 ## 四模块说明
 
-| 模块 | V1 状态 | 说明 |
-|------|---------|------|
+| 模块 | 状态 | 说明 |
+|------|------|------|
 | 首页 | ✅ 真实 | 端到端流程卡片、快速入口、最近活动（数字接 mock store） |
-| 数据管理 | 🔶 mock | 架次列表/详情/登记（3 架次 840 张，只读浏览） |
-| 数据处理 | 🔶 mock | CLAHE/裁切任务列表/详情/新建（7 任务，只读浏览） |
-| 数据集管理 | 🔶 mock | 数据集列表/详情/构建（4 数据集，只读浏览） |
+| 数据管理 | ✅ 真实 | 架次登记/列表/详情、启动自动扫描注册、图片分页浏览/懒加载/缩略图、元数据编辑、删除（不删原始文件） |
+| 数据处理 | ✅ 真实 | 批量 CLAHE 增强/滑窗裁切异步任务、进度轮询、结果预览、加工数据（output/ 自扫描、双 tab 浏览） |
+| 数据集管理 | 🔶 mock | 数据集列表/详情/构建（4 数据集，只读浏览，V4 实现） |
 | 算法广场-算法管理 | ✅ 真实 | 6 模型列表、热切换激活、动态注册、模型详情 |
 | 算法广场-作物检测 | ✅ 真实 | 上传图片 → 选模型 → 同步检测 → 结果图+检测列表 |
 | 算法广场-作物计数 | ✅ 真实 | 高分辨率原图 → 异步计数 → 总数/密度/热力图/置信度/标注图 |
@@ -139,7 +151,10 @@ npm run build                  # 产物输出到 backend/static/
 - **DetectionEngine**：原子化单图 YOLO 推理，无状态可复用。
 - **CountingEngine**：高分辨率原图编排 —— CLAHE 增强 → 滑窗分块 → 逐块检测 → 坐标映射 → 全局 NMS → 计数统计（总数/密度/面积/热力图/置信度分布）。
 - **ModelRegistry**：YAML 加载 + LRU 缓存（上限 3）+ 热切换 + 动态注册。
-- **TaskManager**：ThreadPoolExecutor（并发=1）+ 内存任务表，支持进度回调。
+- **BatchRegistry**：架次注册中心 —— YAML 持久化 + `data/` 自动扫描注册 + 图片索引（Pillow 读尺寸）+ 动态缩略图/预览生成 + ignored_folders 忽略机制。
+- **ProcessingEngine**：无状态处理执行器，批量 CLAHE 增强 / 滑窗裁切，复用 `clahe.py`/`tiling.py`，单图失败隔离，输出 `output/{task_id}/{sub_dir}/` + `index.json` 快照。
+- **ProcessingRegistry**：处理任务持久化 —— YAML 记录 + `output/` 自扫描重建（基于 index.json）+ 任务状态机（pending→processing→completed/failed/interrupted）+ 加工数据列表。
+- **TaskManager**：ThreadPoolExecutor（并发=1）+ 内存任务表，支持进度回调；处理队列独立（processing_task_manager，max_workers=1）。
 
 ## 技术栈
 
@@ -150,12 +165,16 @@ npm run build                  # 产物输出到 backend/static/
 
 ```powershell
 cd backend
-python -m pytest -v            # 72 项测试（核心引擎 TDD + API 接线 + mock 端点）
+python -m pytest -v            # 103 项测试（核心引擎 TDD + API 接线 + 数据管理 + 数据处理 + mock 端点）
 ```
+
+覆盖：检测/计数/注册中心/任务管理/缩略图、架次注册（自动扫描/CRUD/路径校验/分页/忽略列表）、处理引擎（CLAHE/裁切/命名规范/错误隔离）、处理注册（YAML 持久化/自扫描/状态机）、处理 API（端点/降级 503）、端到端处理集成。
 
 ## API 概览
 
 统一响应信封：`{ "success": bool, "data": <data>|null, "message": str }`
+
+### 算法广场（真实）
 
 | 方法 | 路由 | 说明 |
 |------|------|------|
@@ -169,7 +188,41 @@ python -m pytest -v            # 72 项测试（核心引擎 TDD + API 接线 + 
 | GET | `/api/counting/tasks/{id}` | 计数任务进度 |
 | GET | `/api/counting/tasks/{id}/result` | 计数报告 |
 | GET | `/api/counting/history` | 历史计数 |
-| GET | `/api/batches` `/api/processing/tasks` `/api/datasets` | mock 端点（只读） |
+
+### 数据管理（真实）
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/batches` | 架次列表（支持 crop_type/flight_date/plot_name 过滤）+ 汇总 |
+| POST | `/api/batches` | 注册新架次 |
+| GET | `/api/batches/{id}` | 架次详情 |
+| PUT | `/api/batches/{id}` | 更新架次元数据 |
+| DELETE | `/api/batches/{id}` | 删除架次登记（不删原始文件） |
+| GET | `/api/batches/{id}/images` | 架次图片分页列表 |
+| GET | `/api/batches/{id}/images/{filename}/preview` | 图片预览（?size=thumbnail\|medium\|original） |
+| POST | `/api/batches/scan` | 路径预检扫描（表单扫描按钮） |
+| POST | `/api/batches/pick-folder` | 目录选择 |
+
+### 数据处理（真实）
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| POST | `/api/processing/clahe` | 提交 CLAHE 任务（异步） |
+| POST | `/api/processing/crop` | 提交裁切任务（异步） |
+| GET | `/api/processing/tasks` | 任务列表（?type=&status= 过滤） |
+| GET | `/api/processing/tasks/{id}` | 任务详情 |
+| GET | `/api/processing/tasks/{id}/files` | 结果文件清单（分页） |
+| GET | `/api/processing/tasks/{id}/preview` | 结果图片预览 |
+| GET | `/api/processing/processed` | 加工数据列表 |
+| GET | `/api/processing/processed/{id}` | 加工数据详情 |
+| GET | `/api/processing/processed/{id}/files` | 加工数据文件清单 |
+| DELETE | `/api/processing/processed/{id}` | 删除加工数据（?delete_output=true） |
+
+### Mock 端点（V4，只读）
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET | `/api/datasets` | 数据集列表（只读 mock） |
 
 ## 算法默认参数
 
@@ -230,8 +283,11 @@ python -m pytest -v            # 72 项测试（核心引擎 TDD + API 接线 + 
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
-| MAX_WORKERS | 1 | TaskManager 并发=1 |
+| MAX_WORKERS | 1 | TaskManager 并发=1（检测/计数队列） |
 | LRU_CACHE_SIZE | 3 | 模型引擎实例缓存上限 |
+| MAX_IMAGES_PER_BATCH | 2000 | 单架次图片数量上限 |
+| MAX_IMAGE_SIZE_BYTES | 50MB | 单张图片大小上限 |
+| THUMBNAIL_MAX_SIZE / PREVIEW_MEDIUM_SIZE | 400 / 1920 | 图片预览尺寸（px） |
 
 ### 待统一的对齐点
 
@@ -244,10 +300,24 @@ python -m pytest -v            # 72 项测试（核心引擎 TDD + API 接线 + 
 7. 🔶 **计数 batch_size**：前端默认 `16`，引擎内置默认 `8`，请统一。
 8. 🔶 **计数 global_conf**：前端默认 `0.5`，引擎内置默认 `0.0`（关闭全局二次过滤），请统一。
 
+## 数据目录约定
+
+```
+data/
+├── batches.yaml               # 架次登记（启动自动扫描 data/ 一级子目录并注册）
+├── processing_tasks.yaml      # 处理任务记录
+└── {crop}_{date}_{altitude}m/ # 原始架次目录（文件夹名自动推断元数据）
+
+output/
+└── {task_type}_{ts}_{ms}/     # 处理产物目录，目录名 = task_id
+    ├── {sub_dir}/             # 按输入源（架次/自定义目录）分子目录
+    │   ├── DJI_0001.jpg        # CLAHE：保持原文件名
+    │   └── {stem}_tile_{seq:04d}_x{ox}_y{oy}.jpg   # 裁切：子图命名规范
+    └── index.json             # 任务参数 + 输出统计快照
+```
+
 ## 后续阶段
 
-- **V2**：数据管理真实化（架次登记/图片扫描/元数据持久化）
-- **V3**：数据处理真实化（复用 clahe.py/tiling.py，异步处理任务）
-- **V4**：数据集管理真实化（构建/拆分/多格式导出/统计报告）
+- **V4**：数据集管理真实化（构建/拆分/多格式导出/统计报告）—— 当前唯一 mock 模块。
 
 各阶段 mock 端点逐个替换为真实 handler，前端 API 契约不变、零改动。
