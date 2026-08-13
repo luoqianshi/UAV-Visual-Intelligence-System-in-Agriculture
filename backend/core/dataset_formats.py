@@ -128,3 +128,138 @@ def parse_coco(dataset_dir: Path) -> dict:
                 "class_name": ir["classes"][cat_map.get(ann["category_id"], 0)],
             })
     return ir
+
+
+# ── YOLO 解析 ──────────────────────────────────────────────
+def _load_yolo_config(dataset_dir: Path) -> dict:
+    for yf in dataset_dir.glob("*.yaml"):
+        try:
+            cfg = yaml.safe_load(yf.read_text(encoding="utf-8")) or {}
+            if "names" in cfg:
+                return cfg
+        except Exception:
+            continue
+    return {}
+
+
+def parse_yolo(dataset_dir: Path) -> dict:
+    dataset_dir = Path(dataset_dir)
+    ir = _empty_ir("YOLO")
+    cfg = _load_yolo_config(dataset_dir)
+    names = cfg.get("names", {})
+    # names 可能是 dict {0: name} 或 list [name]
+    if isinstance(names, dict):
+        for k in sorted(names.keys()):
+            ir["classes"].append(names[k])
+    elif isinstance(names, list):
+        ir["classes"] = list(names)
+    ir["meta"]["format"] = "YOLO"
+    # 忽略 cfg['path']（过期绝对路径）
+
+    for split in SPLITS:
+        img_dir = dataset_dir / "images" / split
+        lbl_dir = dataset_dir / "labels" / split
+        if not img_dir.is_dir():
+            continue
+        for img in _list_images(img_dir):
+            lbl = lbl_dir / (img.stem + ".txt")
+            # 归一化→绝对像素（需要宽高，YOLO 无尺寸字段，读图片元信息开销大；
+            # 此处用同目录图片的 PIL 读取尺寸）
+            width, height = _image_size(img)
+            boxes = []
+            if lbl.exists():
+                for line in lbl.read_text(encoding="utf-8").splitlines():
+                    parts = line.strip().split()
+                    if len(parts) < 5:
+                        continue
+                    cid = int(parts[0])
+                    xc, yc, w, h = map(float, parts[1:5])
+                    abs_w, abs_h = w * width, h * height
+                    abs_x = xc * width - abs_w / 2
+                    abs_y = yc * height - abs_h / 2
+                    cname = ir["classes"][cid] if cid < len(ir["classes"]) else str(cid)
+                    boxes.append({"bbox": [abs_x, abs_y, abs_w, abs_h],
+                                  "class_id": cid, "class_name": cname})
+            ir["images"].append({
+                "filename": img.name, "split": split,
+                "width": width, "height": height,
+                "origin_stem": _tile_origin_stem(img.stem),
+                "boxes": boxes,
+            })
+    return ir
+
+
+def _image_size(img_path: Path):
+    """读取图片宽高（YOLO 标注无尺寸字段，需读图片元信息）。"""
+    from PIL import Image
+    with Image.open(img_path) as im:
+        return im.size
+
+
+# ── VOC 解析 ──────────────────────────────────────────────
+def _voc_split_dirs(dataset_dir: Path):
+    """返回 [(split, images_dir, annotations_dir)]。"""
+    result = []
+    for split in SPLITS:
+        img_dir = dataset_dir / split / "images"
+        ann_dir = dataset_dir / split / "annotations"
+        if img_dir.is_dir() and ann_dir.is_dir():
+            result.append((split, img_dir, ann_dir))
+    if not result:  # 标准 JPEGImages/+Annotations/ 布局（阶段二构建产物）
+        jpg = dataset_dir / "JPEGImages"
+        ann = dataset_dir / "Annotations"
+        if jpg.is_dir() and ann.is_dir():
+            # 标准 VOC 无 split 目录，全部归 train（导入兼容用；SSDC-UAV 走 split 布局）
+            result.append(("train", jpg, ann))
+    return result
+
+
+def parse_voc(dataset_dir: Path) -> dict:
+    dataset_dir = Path(dataset_dir)
+    ir = _empty_ir("VOC")
+    name_to_id = {}
+    for split, img_dir, ann_dir in _voc_split_dirs(dataset_dir):
+        for img in _list_images(img_dir):
+            xml = ann_dir / (img.stem + ".xml")
+            boxes = []
+            width = height = 0
+            if xml.exists():
+                try:
+                    tree = ET.fromstring(xml.read_text(encoding="utf-8"))
+                except ET.ParseError:
+                    tree = None
+                if tree is not None:
+                    size = tree.find("size")
+                    if size is not None:
+                        w = size.find("width")
+                        h = size.find("height")
+                        if w is not None:
+                            width = int(w.text)
+                        if h is not None:
+                            height = int(h.text)
+                    for obj in tree.findall("object"):
+                        name_el = obj.find("name")
+                        bnd = obj.find("bndbox")
+                        if name_el is None or bnd is None:
+                            continue
+                        cname = name_el.text or ""
+                        if cname not in name_to_id:
+                            name_to_id[cname] = len(ir["classes"])
+                            ir["classes"].append(cname)
+                        xmin = float(bnd.find("xmin").text)
+                        ymin = float(bnd.find("ymin").text)
+                        xmax = float(bnd.find("xmax").text)
+                        ymax = float(bnd.find("ymax").text)
+                        boxes.append({"bbox": [xmin, ymin, xmax - xmin, ymax - ymin],
+                                      "class_id": name_to_id[cname],
+                                      "class_name": cname})
+            if width == 0 or height == 0:
+                width, height = _image_size(img)
+            ir["images"].append({
+                "filename": img.name, "split": split,
+                "width": width, "height": height,
+                "origin_stem": _tile_origin_stem(img.stem),
+                "boxes": boxes,
+            })
+    ir["meta"]["format"] = "VOC"
+    return ir
