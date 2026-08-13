@@ -1,112 +1,187 @@
-"""数据集只读 Mock API。
+"""数据集管理 API（第一阶段：导入注册 + 统计报告 + 浏览删除）。
 
-提供数据集列表（含格式分布）、详情与统计报告。
-所有响应遵循统一信封：{"success": bool, "data": <data>|None, "message": str}。
+对齐 batches_api 风格：统一响应信封 {"success", "data", "message"}。
+ValueError → 400，KeyError → 404，创建成功 → 201。
 """
-import json
-from datetime import datetime, timezone
+from flask import Blueprint, Response, jsonify, request
 
-from flask import Blueprint, jsonify, request
-
-from config import MOCK_DIR
+from core.engine import get_dataset_analyzer, get_dataset_registry
 
 datasets_bp = Blueprint("datasets", __name__)
 
 
-def _load_datasets():
-    """读取 mock/datasets.json。"""
-    with open(MOCK_DIR / "datasets.json", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _format_dist(datasets):
-    """按标注格式统计数据集数量。"""
-    dist = {"YOLO": 0, "COCO": 0, "VOC": 0}
-    for d in datasets:
-        fmt = d.get("format")
-        if fmt in dist:
-            dist[fmt] += 1
-        else:
-            dist[fmt] = dist.get(fmt, 0) + 1
-    return dist
+def _error(message: str, status_code: int = 400):
+    return jsonify({"success": False, "data": None, "message": message}), status_code
 
 
 @datasets_bp.route("/api/datasets", methods=["GET"])
 def list_datasets():
-    """GET /api/datasets → 数据集列表，支持 ?format= 过滤，并返回格式分布。"""
-    datasets = _load_datasets()
-    fmt = request.args.get("format")
-    if fmt:
-        filtered = [d for d in datasets if d.get("format") == fmt]
-    else:
-        filtered = datasets
+    """GET /api/datasets → 数据集列表，?format= 过滤，返回格式分布。"""
+    reg = get_dataset_registry()
+    if reg is None:
+        return _error("dataset_registry 未初始化", 500)
+    fmt = request.args.get("format") or None
+    datasets = reg.list_datasets(fmt=fmt)
     return jsonify({
         "success": True,
-        "data": {
-            "datasets": filtered,
-            "total": len(filtered),
-            "format_dist": _format_dist(datasets),
-        },
+        "data": {"datasets": datasets, "total": len(datasets),
+                 "format_dist": reg.format_dist()},
         "message": "获取数据集列表成功",
     })
 
 
+@datasets_bp.route("/api/datasets/scan", methods=["POST"])
+def scan_dataset():
+    """POST /api/datasets/scan → 路径预检：格式识别 + 轻量统计。"""
+    reg = get_dataset_registry()
+    if reg is None:
+        return _error("dataset_registry 未初始化", 500)
+    body = request.get_json(silent=True) or {}
+    path = body.get("path", "")
+    if not path:
+        return _error("缺少 path 参数", 400)
+    try:
+        result = reg.scan_path(path)
+    except Exception as exc:
+        return _error(f"扫描失败: {exc}", 500)
+    status = 200 if result["valid"] else 400
+    return jsonify({
+        "success": result["valid"],
+        "data": result,
+        "message": result.get("message", ""),
+    }), status
+
+
+@datasets_bp.route("/api/datasets/import", methods=["POST"])
+def import_dataset():
+    """POST /api/datasets/import → 导入注册。"""
+    reg = get_dataset_registry()
+    if reg is None:
+        return _error("dataset_registry 未初始化", 500)
+    body = request.get_json(silent=True) or {}
+    path = body.get("path", "")
+    if not path:
+        return _error("缺少 path 参数", 400)
+    try:
+        cfg = reg.import_dataset(path, name=body.get("name"),
+                                 description=body.get("description"))
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:
+        return _error(f"导入失败: {exc}", 500)
+    return jsonify({
+        "success": True, "data": cfg, "message": "数据集导入成功",
+    }), 201
+
+
 @datasets_bp.route("/api/datasets/<dataset_id>", methods=["GET"])
 def get_dataset(dataset_id):
-    """GET /api/datasets/<dataset_id> → 单个数据集详情。"""
-    datasets = _load_datasets()
-    for d in datasets:
-        if d.get("id") == dataset_id:
-            return jsonify({
-                "success": True,
-                "data": d,
-                "message": "获取数据集详情成功",
-            })
+    """GET /api/datasets/<dataset_id> → 数据集详情。"""
+    reg = get_dataset_registry()
+    if reg is None:
+        return _error("dataset_registry 未初始化", 500)
+    try:
+        cfg = reg.get_dataset(dataset_id)
+    except KeyError:
+        return _error(f"数据集不存在: {dataset_id}", 404)
     return jsonify({
-        "success": False,
-        "data": None,
-        "message": f"数据集不存在: {dataset_id}",
-    }), 404
+        "success": True, "data": cfg, "message": "获取数据集详情成功",
+    })
+
+
+@datasets_bp.route("/api/datasets/<dataset_id>", methods=["DELETE"])
+def delete_dataset(dataset_id):
+    """DELETE /api/datasets/<dataset_id> → 删除（?delete_files=true 物理删除）。"""
+    reg = get_dataset_registry()
+    if reg is None:
+        return _error("dataset_registry 未初始化", 500)
+    delete_files = request.args.get("delete_files", "false").lower() == "true"
+    try:
+        reg.delete_dataset(dataset_id, delete_files=delete_files)
+    except KeyError:
+        return _error(f"数据集不存在: {dataset_id}", 404)
+    msg = "数据集目录已物理删除" if delete_files else "数据集已删除（原始文件未删除）"
+    return jsonify({"success": True, "data": None, "message": msg})
 
 
 @datasets_bp.route("/api/datasets/<dataset_id>/report", methods=["GET"])
 def dataset_report(dataset_id):
-    """GET /api/datasets/<dataset_id>/report → 数据集统计报告。"""
-    datasets = _load_datasets()
-    dataset = next((d for d in datasets if d.get("id") == dataset_id), None)
-    if dataset is None:
-        return jsonify({
-            "success": False,
-            "data": None,
-            "message": f"数据集不存在: {dataset_id}",
-        }), 404
+    """GET /api/datasets/<dataset_id>/report → 统计报告（?force=true 强制重算）。"""
+    reg = get_dataset_registry()
+    az = get_dataset_analyzer()
+    if reg is None or az is None:
+        return _error("数据集引擎未初始化", 500)
+    force = request.args.get("force", "false").lower() == "true"
+    try:
+        cfg = reg.get_dataset(dataset_id)
+    except KeyError:
+        return _error(f"数据集不存在: {dataset_id}", 404)
+    try:
+        report = az.compute_report(cfg, force=force)
+    except Exception as exc:
+        return _error(f"生成报告失败: {exc}", 500)
+    return jsonify({"success": True, "data": report, "message": "ok"})
 
-    total = dataset.get("sample_count", 0)
-    train = dataset.get("train_count", 0)
-    val = dataset.get("val_count", 0)
-    test = dataset.get("test_count", 0)
-    object_count = dataset.get("object_count", 0)
-    classes = dataset.get("classes", [])
 
-    return jsonify({
-        "success": True,
-        "data": {
-            "dataset_id": dataset_id,
-            "summary": {
-                "total_samples": total,
-                "train_count": train,
-                "val_count": val,
-                "test_count": test,
-                "split_ratio": dataset.get("split_ratio"),
-                "object_count": object_count,
-            },
-            "class_dist": [
-                {"class": c, "count": object_count}
-                for c in classes
-            ],
-            "format": dataset.get("format"),
-            "version": dataset.get("version"),
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-        },
-        "message": "获取数据集统计报告成功",
-    })
+@datasets_bp.route("/api/datasets/<dataset_id>/images", methods=["GET"])
+def list_dataset_images(dataset_id):
+    """GET /api/datasets/<dataset_id>/images → 样本分页浏览。"""
+    reg = get_dataset_registry()
+    if reg is None:
+        return _error("dataset_registry 未初始化", 500)
+    split = request.args.get("split", "train")
+    page = request.args.get("page", 1, type=int)
+    page_size = request.args.get("page_size", 50, type=int)
+    try:
+        result = reg.list_images(dataset_id, split=split, page=page, page_size=page_size)
+    except KeyError:
+        return _error(f"数据集不存在: {dataset_id}", 404)
+    except Exception as exc:
+        return _error(f"读取样本列表失败: {exc}", 500)
+    return jsonify({"success": True, "data": result, "message": "获取样本列表成功"})
+
+
+@datasets_bp.route("/api/datasets/<dataset_id>/images/<path:filename>/preview", methods=["GET"])
+def dataset_image_preview(dataset_id, filename):
+    """GET /api/datasets/<dataset_id>/images/<filename>/preview → 样本预览。"""
+    reg = get_dataset_registry()
+    if reg is None:
+        return _error("dataset_registry 未初始化", 500)
+    split = request.args.get("split", "train")
+    size = request.args.get("size", "thumbnail")
+    if size not in ("thumbnail", "medium", "original"):
+        size = "thumbnail"
+    try:
+        img_bytes = reg.get_image_preview(dataset_id, filename, split=split, size=size)
+    except KeyError:
+        return _error(f"数据集不存在: {dataset_id}", 404)
+    except FileNotFoundError:
+        return _error(f"图片不存在: {filename}", 404)
+    except Exception as exc:
+        return _error(f"读取图片失败: {exc}", 500)
+    resp = Response(img_bytes, mimetype="image/jpeg")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+@datasets_bp.route("/api/datasets/pick-folder", methods=["POST"])
+def pick_folder():
+    """POST /api/datasets/pick-folder → 系统原生文件夹选择对话框。"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return _error("当前环境未安装 tkinter，请手动输入路径", 500)
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        folder = filedialog.askdirectory(title="选择数据集目录")
+        root.destroy()
+    except Exception as exc:
+        return _error(f"打开文件夹对话框失败: {exc}", 500)
+    if not folder:
+        return jsonify({"success": False, "data": {"cancelled": True},
+                        "message": "用户取消选择"}), 200
+    return jsonify({"success": True, "data": {"path": folder.replace("\\", "/")},
+                    "message": "文件夹选择成功"})
