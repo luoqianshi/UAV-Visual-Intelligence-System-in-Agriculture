@@ -24,6 +24,8 @@ task_manager = None
 processing_engine = None
 processing_registry = None
 processing_task_manager = None
+dataset_registry = None
+dataset_analyzer = None
 
 
 def init_engines():
@@ -74,6 +76,19 @@ def init_engines():
     except Exception as exc:
         logger.warning("处理引擎初始化失败（数据处理功能不可用）：%s", exc)
 
+    # ⑥ 数据集注册中心 + 分析器：仅依赖 PyYAML + Pillow + stdlib，必须成功
+    global dataset_registry, dataset_analyzer
+    try:
+        from core.dataset_registry import DatasetRegistry
+        from core.dataset_analyzer import DatasetAnalyzer
+        from config import DATASETS_DIR, DATASETS_YAML
+        dataset_registry = DatasetRegistry(DATASETS_DIR, DATASETS_YAML)
+        dataset_analyzer = DatasetAnalyzer(registry=dataset_registry)
+        dataset_registry.set_analyzer(dataset_analyzer)
+        dataset_registry.load_from_yaml()
+    except Exception as exc:
+        logger.warning("数据集引擎初始化失败：%s", exc)
+
 
 def get_registry():
     return registry
@@ -105,3 +120,11 @@ def get_processing_registry():
 
 def get_processing_task_manager():
     return processing_task_manager
+
+
+def get_dataset_registry():
+    return dataset_registry
+
+
+def get_dataset_analyzer():
+    return dataset_analyzer
