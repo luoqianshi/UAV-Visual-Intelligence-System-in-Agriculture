@@ -8,3 +8,10 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+# 数据集管理模块测试用 bare 导入（dataset_formats / dataset_factory 等），
+# 需将 core/ 与 tests/ 一并加入 sys.path
+for _sub in ("core", "tests"):
+    _d = BACKEND_DIR / _sub
+    if str(_d) not in sys.path:
+        sys.path.insert(0, str(_d))
