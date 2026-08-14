@@ -3,7 +3,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageViewer from '@/components/common/ImageViewer.vue'
 import { datasetsApi, type Dataset, type DatasetReport, type DatasetImage } from '@/api/datasets'
 import { useRoute, useRouter } from 'vue-router'
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
 
 const route = useRoute()
@@ -139,8 +139,6 @@ async function loadReport(force = false) {
   try {
     const res = await datasetsApi.fetchReport(id.value, force)
     report.value = res.data
-    await nextTick()
-    renderCharts()
   } catch (e: any) {
     reportError.value = e.response?.data?.message || e.message || '报告未生成'
   } finally {
@@ -225,6 +223,15 @@ function renderCharts() {
     })
   }
 }
+
+// 图表容器位于 v-else-if="dataset" 分支内，仅当 loading=false 后才挂载；
+// 首次加载时 loadReport 先于 loading=false 完成，故在此统一补渲染。
+watch([loading, report], async ([isLoading, rep]) => {
+  if (!isLoading && rep) {
+    await nextTick()
+    renderCharts()
+  }
+})
 
 function resizeCharts() {
   classChart?.resize()
