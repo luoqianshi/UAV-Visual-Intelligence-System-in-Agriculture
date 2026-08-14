@@ -7,6 +7,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -33,7 +34,7 @@ def _list_images(folder: Path):
 
 
 # ── 格式识别 ──────────────────────────────────────────────
-def detect_format(dataset_dir: Path) -> str | None:
+def detect_format(dataset_dir: Path) -> Optional[str]:
     """识别数据集格式。无法识别返回 None。"""
     dataset_dir = Path(dataset_dir)
     if not dataset_dir.is_dir():
