@@ -69,6 +69,12 @@ def test_scan_and_import_flow(app_with_datasets):
     r = client.get(f"/api/datasets/{did}/images?split=train")
     assert r.status_code == 200
     assert r.get_json()["data"]["total"] == 2
+    # 随机抽样 50%：train 2 张 → sample_total 1
+    r = client.get(f"/api/datasets/{did}/images?split=train&sample_ratio=0.5")
+    assert r.status_code == 200
+    data = r.get_json()["data"]
+    assert data["sampled"] is True
+    assert data["sample_total"] == 1
     # preview
     r = client.get(f"/api/datasets/{did}/images/img_t1.jpg/preview?split=train&size=thumbnail")
     assert r.status_code == 200

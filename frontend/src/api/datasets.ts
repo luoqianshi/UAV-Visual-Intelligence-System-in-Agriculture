@@ -55,18 +55,19 @@ export interface DatasetReport {
   class_dist: { name: string; class_id: number; count: number; pct: number }[]
   bbox_stats: {
     avg_width: number; avg_height: number
-    area_hist: [number[], number][]
-    size_dist: { small: number; medium: number; large: number }
+    size_dist: Record<string, { small: number; medium: number; large: number }>
   }
-  image_stats: { resolutions: Record<string, number>; aspect_ratios: Record<string, number> }
-  warnings: string[]
+  image_stats: {
+    resolutions: Record<string, number>
+    aspect_ratios: Record<string, number>
+    instances_per_image: { hist: [number[], number][]; avg: number; max: number; min: number }
+  }
   cached: boolean
   generated_at: string
 }
 
 export interface DatasetImage {
   filename: string; split: string; size_bytes: number
-  width: number; height: number; format: string
   thumbnail_url: string; preview_url: string
 }
 
@@ -99,8 +100,8 @@ export const datasetsApi = {
     client.post<unknown, { data: Dataset }>('/datasets/import', { path, name, description }),
   fetchReport: (id: string, force = false) =>
     client.get<unknown, { data: DatasetReport }>(`/datasets/${id}/report`, { params: { force } }),
-  fetchImages: (id: string, params: { split?: string; page?: number; page_size?: number }) =>
-    client.get<unknown, { data: { images: DatasetImage[]; total: number; page: number; page_size: number; total_pages: number; split: string } }>(
+  fetchImages: (id: string, params: { split?: string; page?: number; page_size?: number; sample_ratio?: number }) =>
+    client.get<unknown, { data: { images: DatasetImage[]; total: number; page: number; page_size: number; total_pages: number; split: string; sampled: boolean; sample_total: number } }>(
       `/datasets/${id}/images`, { params }),
   delete: (id: string, deleteFiles = false) =>
     client.delete<unknown, { data: null }>(`/datasets/${id}`, { params: { delete_files: deleteFiles } }),

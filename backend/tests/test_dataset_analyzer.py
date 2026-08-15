@@ -91,9 +91,15 @@ def test_compute_report_heavy_stats_and_cache(tmp_path):
     assert rep1["summary"]["non_empty_images"] == 4
     assert abs(rep1["bbox_stats"]["avg_width"] - 43.75) < 1  # (30+50+60+20+40+40)/6
     assert rep1["cached"] is False
-    # size_dist 三段之和 = 1
+    # size_dist 分 split 分组：all/train/val/test 均存在
     sd = rep1["bbox_stats"]["size_dist"]
-    assert abs(sd["small"] + sd["medium"] + sd["large"] - 1.0) < 0.01
+    assert {"all", "train", "val", "test"} <= set(sd)
+    assert abs(sd["all"]["small"] + sd["all"]["medium"] + sd["all"]["large"] - 1.0) < 0.01
+    # 每图实例数统计：[3,1,1,1] → avg 1.5
+    ipi = rep1["image_stats"]["instances_per_image"]
+    assert ipi["avg"] == 1.5
+    assert ipi["max"] == 3 and ipi["min"] == 1
+    assert sum(c for _, c in ipi["hist"]) == 4
     # 缓存命中
     rep2 = az.compute_report(cfg, force=False)
     assert rep2["cached"] is True
@@ -114,7 +120,8 @@ def test_compute_report_force_recompute(tmp_path):
     assert rep["cached"] is False
 
 
-def test_compute_report_class_imbalance_warning(tmp_path):
+def test_compute_report_per_image_instances(tmp_path):
+    """每图实例数直方图：mini_coco 为 [3,1,1,1]。"""
     root = tmp_path / "mini_coco"
     build_mini_coco(root)
     az = DatasetAnalyzer(registry=None)
@@ -125,5 +132,11 @@ def test_compute_report_class_imbalance_warning(tmp_path):
                       "test": {"image_count": 1, "object_count": 1}},
            "origin_image_count": 4}
     rep = az.compute_report(cfg, force=True)
-    # 单类别占比 100% > 90% → 失衡告警
-    assert any("失衡" in w or "imbalance" in w.lower() for w in rep["warnings"])
+    ipi = rep["image_stats"]["instances_per_image"]
+    assert ipi["avg"] == 1.5
+    # 整数值直方图：1→3 张、3→1 张
+    assert [[1, 1], 3] in ipi["hist"]
+    assert [[3, 3], 1] in ipi["hist"]
+    assert sum(c for _, c in ipi["hist"]) == 4
+    # warnings 字段已移除
+    assert "warnings" not in rep

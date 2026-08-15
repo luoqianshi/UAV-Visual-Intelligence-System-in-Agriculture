@@ -3,6 +3,7 @@
 镜像 BatchRegistry 模式：datasets/datasets.yaml 就地持久化，启动扫描 datasets/ 自动注册。
 """
 import io
+import random
 import re
 import shutil
 from datetime import datetime
@@ -57,6 +58,10 @@ class DatasetRegistry:
         self._datasets: Dict[str, dict] = {}
         self._ignored_folders: set = set()
         self._analyzer = None
+        # 样本浏览索引缓存：key=f"{dataset_id}:{split}" → {filename: {"size_bytes": int}}
+        # 仅 stat() 不打开图片，避免逐张 PIL 解码导致的翻页卡顿
+        self._image_index: Dict[str, Dict[str, dict]] = {}
+        self._sample_cache: Dict[str, List[str]] = {}
 
     def set_analyzer(self, analyzer):
         self._analyzer = analyzer
@@ -260,7 +265,15 @@ class DatasetRegistry:
         except ValueError:
             pass
         del self._datasets[dataset_id]
+        self.invalidate_image_index(dataset_id)
         self.save_to_yaml()
+
+    def invalidate_image_index(self, dataset_id: str):
+        """删除数据集时清理其样本索引/抽样缓存。"""
+        for key in [k for k in self._image_index if k.startswith(f"{dataset_id}:")]:
+            del self._image_index[key]
+        for key in [k for k in self._sample_cache if k.startswith(f"{dataset_id}:")]:
+            del self._sample_cache[key]
 
     # ── 样本浏览 ───────────────────────────────────────────
     def _image_dir_for_split(self, cfg: dict, split: str) -> Path:
@@ -277,38 +290,58 @@ class DatasetRegistry:
         # VOC
         return folder / split / "images"
 
-    def list_images(self, dataset_id: str, split: str = "train",
-                    page: int = 1, page_size: int = 50) -> dict:
+    def _build_image_index(self, dataset_id: str, split: str) -> Dict[str, dict]:
+        """构建 split 目录的文件索引（仅 stat，不打开图片），带实例缓存。"""
+        key = f"{dataset_id}:{split}"
+        if key in self._image_index:
+            return self._image_index[key]
         cfg = self.get_dataset(dataset_id)
         img_dir = self._image_dir_for_split(cfg, split)
-        images = []
+        index: Dict[str, dict] = {}
         if img_dir.is_dir():
             for entry in sorted(img_dir.iterdir()):
                 if not entry.is_file() or entry.suffix.lower() not in IMAGE_EXTENSIONS:
                     continue
                 try:
-                    stat = entry.stat()
-                    with Image.open(entry) as im:
-                        w, h = im.size
-                        fmt = im.format or entry.suffix.lstrip('.').upper()
-                except Exception:
+                    index[entry.name] = {"size_bytes": entry.stat().st_size}
+                except OSError:
                     continue
-                images.append({"filename": entry.name, "split": split,
-                               "size_bytes": stat.st_size, "width": w, "height": h,
-                               "format": fmt})
-        total = len(images)
+        self._image_index[key] = index
+        return index
+
+    def list_images(self, dataset_id: str, split: str = "train",
+                    page: int = 1, page_size: int = 50,
+                    sample_ratio: Optional[float] = None,
+                    seed: int = 42) -> dict:
+        index = self._build_image_index(dataset_id, split)
+        sampled = sample_ratio is not None and 0 < sample_ratio < 1
+        if sampled:
+            skey = f"{dataset_id}:{split}:{sample_ratio}:{seed}"
+            if skey not in self._sample_cache:
+                files = list(index.keys())
+                k = max(1, round(len(files) * sample_ratio)) if files else 0
+                picked = random.Random(seed).sample(files, min(k, len(files))) if files else []
+                self._sample_cache[skey] = sorted(picked)
+            names = self._sample_cache[skey]
+        else:
+            names = list(index.keys())
+        total = len(names)
         total_pages = max(1, (total + page_size - 1) // page_size)
         page = max(1, min(page, total_pages))
         start = (page - 1) * page_size
-        paged = images[start:start + page_size]
-        for im in paged:
-            fn = im["filename"]
-            im["thumbnail_url"] = (
-                f"/api/datasets/{dataset_id}/images/{fn}/preview?split={split}&size=thumbnail")
-            im["preview_url"] = (
-                f"/api/datasets/{dataset_id}/images/{fn}/preview?split={split}&size=medium")
-        return {"images": paged, "total": total, "page": page,
-                "page_size": page_size, "total_pages": total_pages, "split": split}
+        images = []
+        for fn in names[start:start + page_size]:
+            images.append({"filename": fn, "split": split,
+                           "size_bytes": index[fn]["size_bytes"],
+                           "thumbnail_url": (
+                               f"/api/datasets/{dataset_id}/images/{fn}/preview"
+                               f"?split={split}&size=thumbnail"),
+                           "preview_url": (
+                               f"/api/datasets/{dataset_id}/images/{fn}/preview"
+                               f"?split={split}&size=medium")})
+        return {"images": images, "total": total, "page": page,
+                "page_size": page_size, "total_pages": total_pages, "split": split,
+                "sampled": sampled, "sample_total": total}
 
     def get_image_preview(self, dataset_id: str, filename: str,
                           split: str = "train", size: str = "thumbnail") -> bytes:

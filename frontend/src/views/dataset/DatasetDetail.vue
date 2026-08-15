@@ -17,23 +17,26 @@ const reportError = ref('')
 const loading = ref(true)
 const errorMsg = ref('')
 
-// 样本浏览
+// 样本浏览（每个子集随机抽样 5% 展示，保留分页）
+const SAMPLE_RATIO = 0.05
 const currentSplit = ref<'train' | 'val' | 'test'>('train')
 const images = ref<DatasetImage[]>([])
 const imagesTotal = ref(0)
 const imagesPage = ref(1)
 const imagesPageSize = 50
 const imagesTotalPages = ref(1)
+const imagesLoading = ref(false)
+let imagesLoadSeq = 0
 const viewerImage = ref<string>('')
 const viewerVisible = ref(false)
 const viewerAlt = ref('')
 
 // ECharts 容器引用
 const classChartRef = ref<HTMLElement | null>(null)
-const areaChartRef = ref<HTMLElement | null>(null)
+const instanceChartRef = ref<HTMLElement | null>(null)
 const sizeChartRef = ref<HTMLElement | null>(null)
 let classChart: echarts.ECharts | null = null
-let areaChart: echarts.ECharts | null = null
+let instanceChart: echarts.ECharts | null = null
 let sizeChart: echarts.ECharts | null = null
 
 function statusBadge(status: string): { cls: string; label: string } {
@@ -111,13 +114,6 @@ const summaryRows = computed(() => {
     { set: 'test', color: 'text-brand-100', images: d.test_count || 0, pct: d.sample_count ? (((d.test_count || 0) / d.sample_count) * 100).toFixed(1) : '—' },
   ]
 })
-const splitRatioLabel = computed(() => {
-  const d = dataset.value
-  if (!d) return '—'
-  if (!d.test_count) return `${d.train_count} : ${d.val_count}`
-  return `${d.train_count} : ${d.val_count} : ${d.test_count}`
-})
-
 async function loadDataset() {
   loading.value = true
   errorMsg.value = ''
@@ -172,26 +168,27 @@ function renderCharts() {
       }],
     })
   }
-  // 2. bbox 面积分布直方图
-  if (areaChartRef.value) {
-    areaChart?.dispose()
-    areaChart = echarts.init(areaChartRef.value)
-    const hist = r.bbox_stats.area_hist || []
-    areaChart.setOption({
+  // 2. 每图实例数分布直方图
+  if (instanceChartRef.value) {
+    instanceChart?.dispose()
+    instanceChart = echarts.init(instanceChartRef.value)
+    const hist = r.image_stats.instances_per_image?.hist || []
+    instanceChart.setOption({
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
         formatter: (p: any) => {
           const item = p[0]
           const bounds = hist[item.dataIndex]?.[0] || []
-          return `面积区间 [${bounds[0]} ~ ${bounds[1]}]<br/>目标数：${item.value}`
+          const label = bounds[0] === bounds[1] ? `${bounds[0]} 个` : `${bounds[0]} ~ ${bounds[1]} 个`
+          return `每图实例数 ${label}<br/>图片数：${item.value}`
         },
       },
-      grid: { left: 48, right: 16, top: 16, bottom: 64 },
+      grid: { left: 48, right: 16, top: 16, bottom: 40 },
       xAxis: {
         type: 'category',
-        data: hist.map(h => `${h[0][0]}~${h[0][1]}`),
-        axisLabel: { rotate: 45, fontSize: 9, color: '#9B9A97' },
+        data: hist.map(h => (h[0][0] === h[0][1] ? `${h[0][0]}` : `${h[0][0]}~${h[0][1]}`)),
+        axisLabel: { color: '#9B9A97', fontSize: 10 },
         axisLine: { lineStyle: { color: '#E9E9E7' } },
         axisTick: { show: false },
       },
@@ -204,21 +201,23 @@ function renderCharts() {
       }],
     })
   }
-  // 3. small/medium/large 尺度堆叠条
+  // 3. small/medium/large 尺度堆叠条（全集 + 各 split）
   if (sizeChartRef.value) {
     sizeChart?.dispose()
     sizeChart = echarts.init(sizeChartRef.value)
-    const sd = r.bbox_stats.size_dist
+    const sd = r.bbox_stats.size_dist || {}
+    const groups = ['all', 'train', 'val', 'test']
+    const groupLabel: Record<string, string> = { all: '全集', train: '训练集', val: '验证集', test: '测试集' }
     sizeChart.setOption({
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: (p: any) => p.map((i: any) => `${i.seriesName}：${(i.value * 100).toFixed(1)}%`).join('<br/>') },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: (p: any) => `${p[0]?.axisValue}<br/>` + p.map((i: any) => `${i.seriesName}：${(i.value * 100).toFixed(1)}%`).join('<br/>') },
       legend: { bottom: 0, textStyle: { color: '#787774', fontSize: 11 }, itemWidth: 12, itemHeight: 12 },
       grid: { left: 48, right: 16, top: 16, bottom: 40 },
-      xAxis: { type: 'category', data: ['目标尺度分布'], axisLine: { lineStyle: { color: '#E9E9E7' } }, axisTick: { show: false }, axisLabel: { color: '#787774', fontSize: 11 } },
+      xAxis: { type: 'category', data: groups.map(g => groupLabel[g]), axisLine: { lineStyle: { color: '#E9E9E7' } }, axisTick: { show: false }, axisLabel: { color: '#787774', fontSize: 11 } },
       yAxis: { type: 'value', max: 1, axisLine: { show: false }, axisLabel: { color: '#9B9A97', fontSize: 10, formatter: (v: number) => `${(v * 100).toFixed(0)}%` }, splitLine: { lineStyle: { color: '#F0F0EE' } } },
       series: [
-        { name: 'small (<32²)', type: 'bar', stack: 'size', data: [sd.small], itemStyle: { color: '#FBBF24' }, barMaxWidth: 80 },
-        { name: 'medium (32²~96²)', type: 'bar', stack: 'size', data: [sd.medium], itemStyle: { color: '#10B981' }, barMaxWidth: 80 },
-        { name: 'large (>96²)', type: 'bar', stack: 'size', data: [sd.large], itemStyle: { color: '#3B82F6' }, barMaxWidth: 80 },
+        { name: 'small (<32²)', type: 'bar', stack: 'size', data: groups.map(g => sd[g]?.small || 0), itemStyle: { color: '#FBBF24' }, barMaxWidth: 64 },
+        { name: 'medium (32²~96²)', type: 'bar', stack: 'size', data: groups.map(g => sd[g]?.medium || 0), itemStyle: { color: '#10B981' }, barMaxWidth: 64 },
+        { name: 'large (>96²)', type: 'bar', stack: 'size', data: groups.map(g => sd[g]?.large || 0), itemStyle: { color: '#3B82F6' }, barMaxWidth: 64 },
       ],
     })
   }
@@ -235,20 +234,29 @@ watch([loading, report], async ([isLoading, rep]) => {
 
 function resizeCharts() {
   classChart?.resize()
-  areaChart?.resize()
+  instanceChart?.resize()
   sizeChart?.resize()
 }
 
 async function loadImages() {
+  const seq = ++imagesLoadSeq
+  imagesLoading.value = true
   try {
-    const res = await datasetsApi.fetchImages(id.value, { split: currentSplit.value, page: imagesPage.value, page_size: imagesPageSize })
+    const res = await datasetsApi.fetchImages(id.value, {
+      split: currentSplit.value, page: imagesPage.value, page_size: imagesPageSize,
+      sample_ratio: SAMPLE_RATIO,
+    })
+    if (seq !== imagesLoadSeq) return // 竞态保护：丢弃过期响应
     images.value = res.data.images
     imagesTotal.value = res.data.total
     imagesTotalPages.value = res.data.total_pages
   } catch (e: any) {
+    if (seq !== imagesLoadSeq) return
     images.value = []
     imagesTotal.value = 0
     imagesTotalPages.value = 1
+  } finally {
+    if (seq === imagesLoadSeq) imagesLoading.value = false
   }
 }
 
@@ -294,10 +302,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts)
   classChart?.dispose()
-  areaChart?.dispose()
+  instanceChart?.dispose()
   sizeChart?.dispose()
   classChart = null
-  areaChart = null
+  instanceChart = null
   sizeChart = null
 })
 </script>
@@ -370,10 +378,10 @@ onBeforeUnmount(() => {
         <div class="bg-white border border-surface-border rounded-card p-4"><div class="text-xs text-ink-tertiary">标注框数</div><div class="text-2xl font-semibold text-ink-primary mt-1">{{ dataset.object_count.toLocaleString() }}</div></div>
       </div>
 
-      <div class="grid grid-cols-3 gap-5">
-        <div class="col-span-2 space-y-5">
+      <div class="grid grid-cols-3 gap-5 items-stretch">
+        <div class="col-span-2 flex flex-col">
           <!-- 数据集结构 -->
-          <div class="bg-white border border-surface-border rounded-card p-5">
+          <div class="bg-white border border-surface-border rounded-card p-5 h-full">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-sm font-semibold text-ink-primary">数据集结构</h3>
               <span class="text-xs text-ink-tertiary font-mono">{{ dataset.path || dataset.name }}</span>
@@ -395,30 +403,41 @@ onBeforeUnmount(() => {
               本数据集仅管理 {{ formatLabel(dataset.format) }} 格式。其他格式请查看对应独立数据集。
             </div>
           </div>
+        </div>
 
-          <!-- 数据划分 -->
+        <!-- 基本信息 -->
+        <div class="flex flex-col gap-5">
           <div class="bg-white border border-surface-border rounded-card p-5">
-            <h3 class="text-sm font-semibold text-ink-primary mb-4">数据划分</h3>
-            <div class="grid grid-cols-3 gap-4 mb-4">
-              <div v-for="row in summaryRows" :key="row.set" class="border border-surface-border rounded-card p-3">
-                <div class="flex items-center gap-2 mb-2"><span class="w-2 h-2 rounded-full" :class="row.color" :style="row.set === 'test' ? 'background:#C8E6C9' : ''"></span><span class="text-xs text-ink-secondary">{{ row.set === 'train' ? '训练集' : row.set === 'val' ? '验证集' : '测试集' }}</span></div>
-                <div class="text-2xl font-semibold text-ink-primary">{{ Number(row.images).toLocaleString() }}</div>
-                <div class="text-xs text-ink-tertiary mt-1">{{ row.pct }}%</div>
-              </div>
-            </div>
-            <div class="split-bar">
-              <div class="seg-train" :style="{ flex: dataset.train_count }"></div>
-              <div class="seg-val" :style="{ flex: dataset.val_count }"></div>
-              <div v-if="dataset.test_count" class="seg-test" :style="{ flex: dataset.test_count }"></div>
-            </div>
-            <div class="text-xs text-ink-tertiary mt-3">
-              <i class="fa-solid fa-circle-check text-brand-700 mr-1"></i>
-              已确保同源原图的所有切片都在同一集合内，无数据泄漏 · 划分比例 {{ splitRatioLabel }}
+            <h3 class="text-sm font-semibold text-ink-primary mb-3">基本信息</h3>
+            <div class="space-y-2.5 text-xs">
+              <div class="flex justify-between"><span class="text-ink-tertiary">数据集 ID</span><span class="font-mono text-ink-primary">{{ dataset.id }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">版本</span><span class="text-ink-primary font-medium">{{ dataset.version || '—' }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">任务类型</span><span class="text-ink-primary">目标检测</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">标注格式</span><span class="text-ink-primary">{{ formatLabel(dataset.format) }}（单一）</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">来源</span><span class="text-ink-primary">{{ sourceLabel(dataset.source) }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">类别数</span><span class="text-ink-primary">{{ (dataset.classes || []).length }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">原图数</span><span class="text-ink-primary">{{ dataset.origin_image_count || 0 }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">分辨率</span><span class="text-ink-primary">{{ dataset.image_size || '—' }}</span></div>
+              <div class="flex justify-between gap-2"><span class="text-ink-tertiary flex-shrink-0">存储路径</span><span class="font-mono text-ink-primary text-[11px] text-right break-all">{{ dataset.path }}</span></div>
+              <div class="flex justify-between"><span class="text-ink-tertiary">创建时间</span><span class="text-ink-primary">{{ dataset.created_at }}</span></div>
+              <div v-if="dataset.description" class="flex justify-between gap-2 pt-2 border-t border-surface-border"><span class="text-ink-tertiary flex-shrink-0">描述</span><span class="text-ink-primary text-right">{{ dataset.description }}</span></div>
             </div>
           </div>
 
-          <!-- 统计分析报告 -->
-          <div class="bg-white border border-surface-border rounded-card p-5">
+          <!-- 类别列表 -->
+          <div v-if="dataset.classes && dataset.classes.length" class="bg-white border border-surface-border rounded-card p-5 flex-1">
+            <h3 class="text-sm font-semibold text-ink-primary mb-3">类别列表</h3>
+            <div class="flex flex-wrap gap-1.5">
+              <span v-for="(c, i) in dataset.classes" :key="i" class="tag tag-green text-xs">
+                <span class="font-mono text-[10px] text-ink-tertiary mr-1">{{ i }}</span>{{ c }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 统计分析报告（独占整行） -->
+      <div class="bg-white border border-surface-border rounded-card p-5 mt-5">
             <div class="flex items-center justify-between mb-5">
               <div>
                 <h3 class="text-sm font-semibold text-ink-primary">统计分析报告</h3>
@@ -455,6 +474,7 @@ onBeforeUnmount(() => {
                       <tr>
                         <th class="text-left py-2 px-3 font-medium">集合</th>
                         <th class="text-right py-2 px-3 font-medium">图片数</th>
+                        <th class="text-right py-2 px-3 font-medium">实例数</th>
                         <th class="text-right py-2 px-3 font-medium">占比</th>
                       </tr>
                     </thead>
@@ -462,11 +482,13 @@ onBeforeUnmount(() => {
                       <tr v-for="row in summaryRows" :key="row.set" class="border-t border-surface-border">
                         <td class="py-2 px-3"><span class="dot mr-1.5" :class="row.color" :style="row.set === 'test' ? 'background:#C8E6C9' : ''"></span>{{ row.set }}</td>
                         <td class="text-right py-2 px-3 text-ink-primary">{{ Number(row.images).toLocaleString() }}</td>
+                        <td class="text-right py-2 px-3 text-ink-primary">{{ Number(report.summary.splits[row.set]?.object_count || 0).toLocaleString() }}</td>
                         <td class="text-right py-2 px-3 text-ink-secondary">{{ row.pct }}%</td>
                       </tr>
                       <tr class="border-t-2 border-surface-border bg-surface-bg/50 font-medium">
                         <td class="py-2 px-3 text-ink-primary">合计</td>
                         <td class="text-right py-2 px-3 text-ink-primary">{{ dataset.sample_count.toLocaleString() }}</td>
+                        <td class="text-right py-2 px-3 text-ink-primary">{{ report.summary.total_objects.toLocaleString() }}</td>
                         <td class="text-right py-2 px-3 text-ink-secondary">100%</td>
                       </tr>
                     </tbody>
@@ -488,37 +510,26 @@ onBeforeUnmount(() => {
 
               <div class="divider mb-6"></div>
 
-              <!-- 3. bbox 面积分布直方图 -->
+              <!-- 3. 每图实例数分布直方图 -->
               <div class="mb-6">
                 <div class="flex items-center gap-2 mb-3">
                   <span class="text-xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded">3</span>
-                  <h4 class="text-sm font-medium text-ink-primary">标注框面积分布</h4>
-                  <span class="text-xs text-ink-tertiary">· 平均尺寸 {{ report.bbox_stats.avg_width }} × {{ report.bbox_stats.avg_height }} px</span>
+                  <h4 class="text-sm font-medium text-ink-primary">每图实例数分布</h4>
+                  <span class="text-xs text-ink-tertiary">· 平均每张 {{ report.image_stats.instances_per_image.avg }} 个实例（最大 {{ report.image_stats.instances_per_image.max }} / 最小 {{ report.image_stats.instances_per_image.min }}）</span>
                 </div>
-                <div ref="areaChartRef" class="w-full h-64"></div>
+                <div ref="instanceChartRef" class="w-full h-64"></div>
               </div>
 
               <div class="divider mb-6"></div>
 
-              <!-- 4. 目标尺度分布（COCO small/medium/large） -->
+              <!-- 4. 目标尺度分布（COCO small/medium/large，分 split） -->
               <div class="mb-3">
                 <div class="flex items-center gap-2 mb-3">
                   <span class="text-xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded">4</span>
                   <h4 class="text-sm font-medium text-ink-primary">目标尺度分布</h4>
-                  <span class="text-xs text-ink-tertiary">· COCO 标准（small &lt; 32²、medium 32²~96²、large &gt; 96²）</span>
+                  <span class="text-xs text-ink-tertiary">· COCO 标准（small &lt; 32²、medium 32²~96²、large &gt; 96²）· 全集 / 训练集 / 验证集 / 测试集</span>
                 </div>
-                <div ref="sizeChartRef" class="w-full h-48"></div>
-              </div>
-
-              <!-- 失衡告警 -->
-              <div v-if="report.warnings && report.warnings.length" class="mt-4 bg-amber-50 border border-amber-200 rounded-btn p-3 text-xs text-amber-700">
-                <div class="flex items-start gap-1.5">
-                  <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
-                  <div>
-                    <div class="font-medium mb-0.5">数据质量告警</div>
-                    <div v-for="(w, i) in report.warnings" :key="i">{{ w }}</div>
-                  </div>
-                </div>
+                <div ref="sizeChartRef" class="w-full h-64"></div>
               </div>
             </div>
 
@@ -531,17 +542,24 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- 样本浏览 -->
-          <div class="bg-white border border-surface-border rounded-card p-5">
+      <!-- 样本浏览（独占整行） -->
+      <div class="bg-white border border-surface-border rounded-card p-5 mt-5">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="text-sm font-semibold text-ink-primary">样本浏览</h3>
+              <div>
+                <h3 class="text-sm font-semibold text-ink-primary">样本浏览</h3>
+                <p class="text-xs text-ink-tertiary mt-0.5">随机展示 {{ currentSplit }} 子集 5% 的样例（共 {{ imagesTotal }} 张）</p>
+              </div>
               <div class="flex gap-2">
                 <button v-for="s in (['train','val','test'] as const)" :key="s" @click="switchSplit(s)"
                   class="px-3 py-1 text-xs rounded-btn"
                   :class="currentSplit === s ? 'bg-brand-700 text-white' : 'bg-white border border-surface-border text-ink-secondary hover:bg-surface-hover'">{{ s }}</button>
               </div>
             </div>
-            <div v-if="images.length === 0" class="py-12 text-center text-xs text-ink-tertiary">
+            <div v-if="imagesLoading" class="py-12 text-center text-xs text-ink-tertiary">
+              <i class="fa-solid fa-circle-notch fa-spin text-xl"></i>
+              <div class="mt-2">加载样例中…</div>
+            </div>
+            <div v-else-if="images.length === 0" class="py-12 text-center text-xs text-ink-tertiary">
               <i class="fa-solid fa-images text-2xl mb-2 block"></i>该集合暂无样本图片
             </div>
             <div v-else class="grid grid-cols-6 gap-3">
@@ -554,63 +572,16 @@ onBeforeUnmount(() => {
                 <div class="text-[10px] text-ink-tertiary px-1.5 py-1 truncate font-mono" :title="img.filename">{{ img.filename }}</div>
               </div>
             </div>
-            <div v-if="images.length > 0" class="mt-4 flex items-center justify-between text-xs text-ink-tertiary">
-              <span>共 {{ imagesTotal }} 张 · 第 {{ imagesPage }}/{{ imagesTotalPages }} 页</span>
+            <div v-if="!imagesLoading && images.length > 0" class="mt-4 flex items-center justify-between text-xs text-ink-tertiary">
+              <span>共 {{ imagesTotal }} 张样例 · 第 {{ imagesPage }}/{{ imagesTotalPages }} 页</span>
               <div class="flex gap-2">
-                <button @click="changePage(imagesPage - 1)" :disabled="imagesPage <= 1"
+                <button @click="changePage(imagesPage - 1)" :disabled="imagesPage <= 1 || imagesLoading"
                   class="px-2.5 py-1 border border-surface-border rounded-btn hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed">上一页</button>
-                <button @click="changePage(imagesPage + 1)" :disabled="imagesPage >= imagesTotalPages"
+                <button @click="changePage(imagesPage + 1)" :disabled="imagesPage >= imagesTotalPages || imagesLoading"
                   class="px-2.5 py-1 border border-surface-border rounded-btn hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed">下一页</button>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- 基本信息 -->
-        <div class="space-y-5">
-          <div class="bg-white border border-surface-border rounded-card p-5">
-            <h3 class="text-sm font-semibold text-ink-primary mb-3">基本信息</h3>
-            <div class="space-y-2.5 text-xs">
-              <div class="flex justify-between"><span class="text-ink-tertiary">数据集 ID</span><span class="font-mono text-ink-primary">{{ dataset.id }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">版本</span><span class="text-ink-primary font-medium">{{ dataset.version || '—' }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">任务类型</span><span class="text-ink-primary">目标检测</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">标注格式</span><span class="text-ink-primary">{{ formatLabel(dataset.format) }}（单一）</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">来源</span><span class="text-ink-primary">{{ sourceLabel(dataset.source) }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">类别数</span><span class="text-ink-primary">{{ (dataset.classes || []).length }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">原图数</span><span class="text-ink-primary">{{ dataset.origin_image_count || 0 }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">分辨率</span><span class="text-ink-primary">{{ dataset.image_size || '—' }}</span></div>
-              <div class="flex justify-between gap-2"><span class="text-ink-tertiary flex-shrink-0">存储路径</span><span class="font-mono text-ink-primary text-[11px] text-right break-all">{{ dataset.path }}</span></div>
-              <div class="flex justify-between"><span class="text-ink-tertiary">创建时间</span><span class="text-ink-primary">{{ dataset.created_at }}</span></div>
-              <div v-if="dataset.description" class="flex justify-between gap-2 pt-2 border-t border-surface-border"><span class="text-ink-tertiary flex-shrink-0">描述</span><span class="text-ink-primary text-right">{{ dataset.description }}</span></div>
-            </div>
-          </div>
-
-          <!-- 类别列表 -->
-          <div v-if="dataset.classes && dataset.classes.length" class="bg-white border border-surface-border rounded-card p-5">
-            <h3 class="text-sm font-semibold text-ink-primary mb-3">类别列表</h3>
-            <div class="flex flex-wrap gap-1.5">
-              <span v-for="(c, i) in dataset.classes" :key="i" class="tag tag-green text-xs">
-                <span class="font-mono text-[10px] text-ink-tertiary mr-1">{{ i }}</span>{{ c }}
-              </span>
-            </div>
-          </div>
-
-          <!-- 危险操作区 -->
-          <div class="bg-white border border-red-200 rounded-card p-5">
-            <h3 class="text-sm font-semibold text-red-600 mb-2">删除数据集</h3>
-            <p class="text-xs text-ink-tertiary mb-3">从注册中心移除此数据集。默认仅删除注册记录，原始文件保留；勾选「删除文件」将同时物理删除数据集目录。</p>
-            <label class="flex items-center gap-2 text-xs text-ink-secondary mb-3 cursor-pointer">
-              <input type="checkbox" v-model="deleteFiles" class="accent-red-600" />
-              <span>同时删除数据集目录文件（不可恢复）</span>
-            </label>
-            <button @click="doDelete" :disabled="deleting"
-              :class="deleteFiles ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white border border-red-300 text-red-600 hover:bg-red-50'"
-              class="w-full px-3 py-2 rounded-btn text-sm font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50">
-              <i class="fa-solid fa-trash text-xs"></i>{{ deleting ? '删除中…' : (deleteFiles ? '确认物理删除' : '删除注册记录') }}
-            </button>
-          </div>
-        </div>
-      </div>
     </template>
 
     <!-- 大图预览 -->

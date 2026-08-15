@@ -132,8 +132,10 @@ def list_dataset_images(dataset_id):
     split = request.args.get("split", "train")
     page = request.args.get("page", 1, type=int)
     page_size = request.args.get("page_size", 50, type=int)
+    sample_ratio = request.args.get("sample_ratio", type=float)
     try:
-        result = reg.list_images(dataset_id, split=split, page=page, page_size=page_size)
+        result = reg.list_images(dataset_id, split=split, page=page, page_size=page_size,
+                                 sample_ratio=sample_ratio)
     except KeyError:
         return _error(f"数据集不存在: {dataset_id}", 404)
     except Exception as exc:

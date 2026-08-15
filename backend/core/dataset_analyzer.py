@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 _PARSERS = {"COCO": parse_coco, "YOLO": parse_yolo, "VOC": parse_voc}
 
+# 报告结构版本号：统计口径变化时递增，使旧 report_cache 自动失效
+REPORT_VERSION = 2
+
 
 class DatasetAnalyzer:
     def __init__(self, registry=None):
@@ -74,7 +77,7 @@ class DatasetAnalyzer:
         meta_path = dataset_dir / "dataset_meta.json"
         meta = self._read_meta(meta_path)
         cache = (meta or {}).get("report_cache")
-        if cache and not force:
+        if cache and not force and cache.get("report_version") == REPORT_VERSION:
             report = dict(cache)
             report["cached"] = True
             report["dataset_id"] = cfg["dataset_id"]
@@ -94,13 +97,14 @@ class DatasetAnalyzer:
             "class_dist": heavy["class_dist"],
             "bbox_stats": heavy["bbox_stats"],
             "image_stats": heavy["image_stats"],
-            "warnings": heavy["warnings"],
             "cached": False,
             "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
         }
-        # 回写缓存
+        # 回写缓存（带版本号，统计口径变化时自动失效）
         meta = meta or {"dataset_id": cfg["dataset_id"]}
-        meta["report_cache"] = {k: v for k, v in report.items() if k != "cached"}
+        cache_body = {k: v for k, v in report.items() if k != "cached"}
+        cache_body["report_version"] = REPORT_VERSION
+        meta["report_cache"] = cache_body
         meta["report_cached_at"] = report["generated_at"]
         self._write_meta(meta_path, meta)
         return report
@@ -130,46 +134,52 @@ class DatasetAnalyzer:
         class_counter = Counter()
         resolutions = Counter()
         aspect_ratios = Counter()
-        widths, heights, areas = [], [], []
-        non_empty = 0
+        widths, heights = [], []
+        split_areas = {"all": []}
+        per_image_counts = []
         for im in ir["images"]:
             resolutions[f"{im['width']}x{im['height']}"] += 1
             ar = round(im["width"] / im["height"], 2) if im["height"] else 0
             aspect_ratios[f"{ar:.2f}"] += 1
-            if im["boxes"]:
-                non_empty += 1
+            per_image_counts.append(len(im["boxes"]))
+            split_areas.setdefault(im["split"], [])
             for b in im["boxes"]:
                 _, _, w, h = b["bbox"]
                 widths.append(w)
                 heights.append(h)
-                areas.append(w * h)
+                area = w * h
+                split_areas["all"].append(area)
+                split_areas[im["split"]].append(area)
                 class_counter[b["class_name"]] += 1
         total_objs = sum(class_counter.values())
         class_dist = [{"name": n, "class_id": i, "count": c,
                        "pct": round(c / total_objs * 100, 2) if total_objs else 0}
                       for i, (n, c) in enumerate(sorted(class_counter.items()))]
-        warnings = []
-        if class_dist and total_objs:
-            if class_dist[0]["pct"] > 90:
-                warnings.append(
-                    f"类别分布失衡：{class_dist[0]['name']} 占比 {class_dist[0]['pct']}% > 90%")
-        # 面积直方图（20 桶）
-        area_hist = self._histogram(areas, 20)
-        # COCO small/medium/large
-        size_dist = self._coco_size_dist(areas)
+        # 每图实例数统计（直方图 + 平均/最大/最小）
+        if per_image_counts:
+            instances_per_image = {
+                "hist": self._int_histogram(per_image_counts),
+                "avg": round(total_objs / len(per_image_counts), 2),
+                "max": max(per_image_counts),
+                "min": min(per_image_counts),
+            }
+        else:
+            instances_per_image = {"hist": [], "avg": 0, "max": 0, "min": 0}
+        # COCO small/medium/large：全集 + 各 split 分组
+        size_dist = {name: self._coco_size_dist(areas)
+                     for name, areas in split_areas.items()}
         bbox_stats = {
             "avg_width": round(sum(widths) / len(widths), 2) if widths else 0,
             "avg_height": round(sum(heights) / len(heights), 2) if heights else 0,
-            "area_hist": area_hist,
             "size_dist": size_dist,
         }
         return {
             "class_dist": class_dist,
             "bbox_stats": bbox_stats,
             "image_stats": {"resolutions": dict(resolutions),
-                            "aspect_ratios": dict(aspect_ratios)},
-            "warnings": warnings,
-            "non_empty_images": non_empty,
+                            "aspect_ratios": dict(aspect_ratios),
+                            "instances_per_image": instances_per_image},
+            "non_empty_images": sum(1 for c in per_image_counts if c),
         }
 
     @staticmethod
@@ -187,6 +197,16 @@ class DatasetAnalyzer:
             counts[idx] += 1
         return [[[round(edges[i], 2), round(edges[i + 1], 2)], counts[i]]
                 for i in range(bins)]
+
+    def _int_histogram(self, values):
+        """整数值直方图（每图实例数）：取值范围 ≤20 时每个整数值一桶，否则 20 等分桶。"""
+        if not values:
+            return []
+        lo, hi = min(values), max(values)
+        if hi - lo + 1 <= 20:
+            counter = Counter(values)
+            return [[[v, v], counter.get(v, 0)] for v in range(lo, hi + 1)]
+        return self._histogram(values, 20)
 
     @staticmethod
     def _coco_size_dist(areas):
