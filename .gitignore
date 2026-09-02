@@ -35,6 +35,7 @@ Thumbs.db
 # 私人
 .lqs/
 .trae/
+.qwenwork/
 
 # 日志
 .backend_stderr.log
