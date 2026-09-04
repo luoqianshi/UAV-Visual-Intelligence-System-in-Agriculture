@@ -36,6 +36,7 @@ Thumbs.db
 .lqs/
 .trae/
 .qwenwork/
+paper_chapter/*
 
 # 日志
 .backend_stderr.log
