@@ -1,0 +1,48 @@
+# -*- coding: utf-8 -*-
+# ============================================================
+# UAV Visual Intelligence System - CPU 版 Python 依赖清单
+# ------------------------------------------------------------
+# 用途：无独立显卡（无 CUDA）本机的推理环境。
+# 与 requirements.txt 的区别仅在于 torch 三件套改用 +cpu
+# 版本（约 200MB，替代 +cu121 的约 2.4GB），其余版本严格
+# 一致，保证推理结果与训练环境（Python 3.8.20 /
+# torch 2.1.0 / ultralytics 8.4.60）特征对齐。
+#
+# 推荐流程：
+#   conda create -n uav-vis python=3.10 -y
+#   conda activate uav-vis
+#   pip install -r requirements-cpu.txt
+#
+# 说明：torch / torchvision / torchaudio 的 +cpu 后缀版本
+# 需经 PyTorch 官方 cpu 索引获取，已在下方通过
+# --extra-index-url 声明，pip 会自动匹配对应轮子。
+# ============================================================
+
+# --- PyTorch 生态（CPU 推理版）---
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.1.0+cpu
+torchvision==0.16.0+cpu
+torchaudio==2.1.0+cpu
+
+# --- YOLO 检测框架 ---
+ultralytics==8.4.60
+
+# --- Web 服务（Flask 后端）---
+flask==2.2.3
+flask-cors==4.0.0
+werkzeug==2.2.3
+
+# --- 计算机视觉与数值计算 ---
+numpy==1.24.1
+# 注：原 requirements.txt 的 opencv-python==4.13.0.92 在 Python>=3.9 时强制
+# numpy>=2，与 torch 2.1.0（仅兼容 numpy 1.x）冲突；训练环境因 Python 3.8
+# 不受影响。此处降级到 4.10.0.84（与 numpy 1.24.1 兼容，cv2 API 一致）。
+opencv-python==4.10.0.84
+Pillow==10.2.0
+scipy==1.10.1
+matplotlib==3.7.5
+pandas==2.0.3
+
+# --- 配置与测试工具 ---
+pyyaml==6.0.3
+pytest==8.3.5
