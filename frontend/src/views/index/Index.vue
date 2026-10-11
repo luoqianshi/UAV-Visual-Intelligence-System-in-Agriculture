@@ -128,9 +128,9 @@ onMounted(() => {
     <!-- 页头 -->
     <div class="mb-6">
       <div class="text-xs text-ink-tertiary mb-1">工作台</div>
-      <h1 class="text-2xl font-semibold text-ink-primary">田间智监 · 端到端工作流</h1>
+      <h1 class="text-2xl font-semibold text-ink-primary">田间智瞰 · 端到端工作流</h1>
       <p class="text-sm text-ink-secondary mt-1">
-        基于无人机图像的大田农作物智能监测 · 数据 → 处理 → 数据集 → 算法 四模块闭环
+        无人机智能巡检的大田甘蔗幼苗监测与管理软件 · 数据 → 处理 → 数据集 → 算法 四模块闭环
       </p>
     </div>
 

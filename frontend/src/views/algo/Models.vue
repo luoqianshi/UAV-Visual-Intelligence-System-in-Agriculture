@@ -41,7 +41,7 @@ async function onSwitch(m: ModelConfig) {
 
     <SubTabs />
 
-    <div class="grid grid-cols-4 gap-4 mb-5">
+    <div class="grid grid-cols-3 gap-4 mb-5">
       <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
         <div class="flex items-center justify-between">
           <div>
@@ -65,18 +65,6 @@ async function onSwitch(m: ModelConfig) {
           </div>
         </div>
         <div class="text-xs text-ink-tertiary mt-2">Ultralytics · Custom</div>
-      </div>
-      <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-xs text-ink-tertiary">最佳 mAP@0.5</div>
-            <div class="text-2xl font-bold text-brand-700 mt-1 font-numeric">0.884</div>
-          </div>
-          <div class="w-9 h-9 rounded-btn bg-amber-50 flex items-center justify-center text-amber-600">
-            <Icon name="target" :size="18" />
-          </div>
-        </div>
-        <div class="text-xs text-ink-tertiary mt-2">YOLO12s-sugarcane</div>
       </div>
       <div class="bg-white border border-surface-border rounded-card p-4 card-hover">
         <div class="flex items-center justify-between">

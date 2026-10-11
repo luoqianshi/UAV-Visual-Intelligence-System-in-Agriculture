@@ -119,8 +119,7 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
           <img src="/app-icon-sm.svg" alt="田间智瞰" class="w-8 h-8 flex-shrink-0" />
           <div class="min-w-0">
-            <div class="font-semibold text-ink-primary text-base tracking-tight truncate">田间智瞰</div>
-            <div class="text-xs text-ink-tertiary truncate">UAV智能农业监管系统</div>
+            <div class="font-semibold text-ink-primary text-lg tracking-tight truncate">田间智瞰</div>
           </div>
         </div>
         <button
@@ -164,16 +163,15 @@ const currentWidth = computed(() => (collapsed.value ? COLLAPSED_WIDTH : width.v
       <div
         class="flex items-center gap-2.5 px-2 py-2 rounded-btn hover:bg-surface-hover cursor-pointer transition-colors"
         :class="{ 'justify-center px-0 py-0': collapsed }"
-        :title="collapsed ? '研究员 · 甘蔗组' : ''"
+        :title="collapsed ? '观察员' : ''"
       >
         <div
-          class="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-sm font-medium flex-shrink-0"
+          class="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 flex-shrink-0"
         >
-          L
+          <Icon name="user" :size="16" />
         </div>
         <div v-if="!collapsed" class="flex-1 min-w-0">
-          <div class="text-sm text-ink-primary truncate font-medium">研究员</div>
-          <div class="text-xs text-ink-tertiary truncate">甘蔗组</div>
+          <div class="text-sm text-ink-primary truncate font-medium">观察员</div>
         </div>
       </div>
     </div>

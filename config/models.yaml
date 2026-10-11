@@ -66,3 +66,58 @@ models:
   device: null
   classes: [Sugarcane Seedling]
   max_det: 300
+- name: yolo26n-sugarcane
+  engine: ultralytics
+  weight: models/yolo26n_sugarcane.pt
+  display_name: YOLO26n 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolo11n-sugarcane
+  engine: ultralytics
+  weight: models/yolo11n_sugarcane.pt
+  display_name: YOLOv11n 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolov8n-sugarcane
+  engine: ultralytics
+  weight: models/yolov8n_sugarcane.pt
+  display_name: YOLOv8n 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolov5n-sugarcane
+  engine: ultralytics
+  weight: models/yolov5n_sugarcane.pt
+  display_name: YOLOv5nu 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
+- name: yolo10-sugarcane
+  engine: ultralytics
+  weight: models/yolo10_sugarcane.pt
+  display_name: YOLOv10n 甘蔗幼苗
+  category: sugarcane_seedling
+  imgsz: 640
+  conf: 0.25
+  iou: 0.7
+  device: null
+  classes: [Sugarcane Seedling]
+  max_det: 300
