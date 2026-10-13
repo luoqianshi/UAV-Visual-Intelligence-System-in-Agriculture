@@ -39,6 +39,7 @@ Thumbs.db
 .qoder/
 .workbuddy/
 paper_chapter/*
+remotion/*
 
 # 日志
 .backend_stderr.log
