@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 
 // 15 条路由，对应 V0.4 原型全部页面
 const routes = [
@@ -30,7 +30,9 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  // Pages 为纯静态托管（无服务端重写），深路径刷新会 404 → 改用 hash 路由；
+  // 本地开发与 Flask 托管保持 history 模式不变
+  history: import.meta.env.MODE === 'pages' ? createWebHashHistory() : createWebHistory(),
   routes,
 })
 
